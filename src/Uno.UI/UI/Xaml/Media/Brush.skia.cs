@@ -249,7 +249,8 @@ namespace Windows.UI.Xaml.Media
 		{
 			var disposables = new CompositeDisposable();
 
-			var compositionBrush = brush.CompositionBrush;
+			//TODO Uno: CompositionBrush property is currently unsupported
+			//var compositionBrush = brush.CompositionBrush;
 
 			//brush.RegisterDisposablePropertyChangedCallback(
 			//	XamlCompositionBrushBase.CompositionBrushProperty,
@@ -257,7 +258,7 @@ namespace Windows.UI.Xaml.Media
 			//)
 			//.DisposeWith(disposables);
 
-			brushSetter(compositionBrush);
+			//brushSetter(compositionBrush);
 
 			return disposables;
 		}
