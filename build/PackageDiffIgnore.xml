@@ -3923,6 +3923,20 @@
 			<Member
 				fullName="System.Boolean Windows.UI.Xaml.Controls.VirtualizingPanelLayout.ShouldInsertReorderingView(System.Double physicalExtentOffset)"
 				reason="INVALID REMOVE, TO ADJUST" />
+          <Member
+				fullName="System.Void Windows.Devices.Bluetooth.BluetoothClassOfDevice..ctor()"
+				reason="Doesn't exist in UWP" />
+          <Member
+				fullName="System.Void Windows.Devices.Bluetooth.BluetoothLEAppearance..ctor()"
+				reason="Doesn't exist in UWP" />
+
+
+			<Member
+				fullName="System.Void Windows.UI.Notifications.BadgeUpdater..ctor()"
+				reason="Should not be public" />
+			<Member
+				fullName="System.Void Windows.UI.Notifications.BadgeUpdateManager..ctor()"
+				reason="Should not be public" />
 
 		</Methods>
 		<Properties>
