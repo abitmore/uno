@@ -264,6 +264,7 @@ var MonoSupport;
                     jsCallDispatcher.registerScope("UnoStatic", Uno.UI.WindowManager);
                     jsCallDispatcher.registerScope("UnoStatic_Windows_Storage_StorageFolder", Windows.Storage.StorageFolder);
                     jsCallDispatcher.registerScope("UnoStatic_Windows_Storage_ApplicationDataContainer", Windows.Storage.ApplicationDataContainer);
+                    jsCallDispatcher.registerScope("UnoStatic_Windows_ApplicationModel_DataTransfer_DragDrop_Core_DragDropExtension", Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension);
                     jsCallDispatcher._isUnoRegistered = true;
                 }
                 const { ns, methodName } = jsCallDispatcher.parseIdentifier(identifier);
@@ -385,7 +386,7 @@ var Uno;
                                 //
                                 // If the image fails to load, setup the splashScreen anyways with the
                                 // proper sample.
-                                let canvas = document.createElement('canvas');
+                                let canvas = document.createElement("canvas");
                                 canvas.width = img.width;
                                 canvas.height = img.height;
                                 let ctx = canvas.getContext("2d");
@@ -411,7 +412,7 @@ var Uno;
                     const UNO_BOOTSTRAP_WEBAPP_BASE_PATH = config.environmentVariables["UNO_BOOTSTRAP_WEBAPP_BASE_PATH"] || "";
                     let fullImagePath = String(UnoAppManifest.splashScreenImage);
                     // If the splashScreenImage image already points to the app base path, use it, otherwise we build it.
-                    if (UNO_BOOTSTRAP_APP_BASE !== '' && fullImagePath.indexOf(UNO_BOOTSTRAP_APP_BASE) == -1) {
+                    if (UNO_BOOTSTRAP_APP_BASE !== "" && fullImagePath.indexOf(UNO_BOOTSTRAP_APP_BASE) == -1) {
                         fullImagePath = `${UNO_BOOTSTRAP_WEBAPP_BASE_PATH}${UNO_BOOTSTRAP_APP_BASE}/${UnoAppManifest.splashScreenImage}`;
                     }
                     img.src = fullImagePath;
@@ -463,7 +464,7 @@ var Uno;
                     return new URLSearchParams(window.location.search).toString();
                 }
                 else {
-                    const queryIndex = document.location.search.indexOf('?');
+                    const queryIndex = document.location.search.indexOf("?");
                     if (queryIndex !== -1) {
                         return document.location.search.substring(queryIndex + 1);
                     }
@@ -679,7 +680,7 @@ var Uno;
                 const element = this.getView(elementId);
                 for (const name in properties) {
                     if (properties.hasOwnProperty(name)) {
-                        var setVal = properties[name];
+                        const setVal = properties[name];
                         if (setVal === "true") {
                             element[name] = true;
                         }
@@ -700,7 +701,7 @@ var Uno;
                 const params = WindowManagerSetPropertyParams.unmarshal(pParams);
                 const element = this.getView(params.HtmlId);
                 for (let i = 0; i < params.Pairs_Length; i += 2) {
-                    var setVal = params.Pairs[i + 1];
+                    const setVal = params.Pairs[i + 1];
                     if (setVal === "true") {
                         element[params.Pairs[i]] = true;
                     }
@@ -927,7 +928,7 @@ var Uno;
             setElementTransformNative(pParams) {
                 const params = WindowManagerSetElementTransformParams.unmarshal(pParams);
                 const element = this.getView(params.HtmlId);
-                var style = element.style;
+                const style = element.style;
                 const matrix = `matrix(${params.M11},${params.M12},${params.M21},${params.M22},${params.M31},${params.M32})`;
                 style.transform = matrix;
                 this.setAsArranged(element);
@@ -1068,7 +1069,7 @@ var Uno;
                     // We achieve that by buffering it until the next few 'pointermove' on document for which we validate the new pointer location.
                     // It's common to get a move right after the leave with the same pointer's location,
                     // so we wait up to 3 pointer move before dropping the leave event.
-                    var attempt = 3;
+                    let attempt = 3;
                     WindowManager.current.ensurePendingLeaveEventProcessing();
                     WindowManager.current.processPendingLeaveEvent = (move) => {
                         if (!move.isOverDeep(element)) {
@@ -1197,9 +1198,9 @@ var Uno;
                 // defined in the browser settings. 
                 // https://stackoverflow.com/questions/20110224/what-is-the-height-of-a-line-in-a-wheel-event-deltamode-dom-delta-line
                 if (this._wheelLineSize == undefined) {
-                    const el = document.createElement('div');
-                    el.style.fontSize = 'initial';
-                    el.style.display = 'none';
+                    const el = document.createElement("div");
+                    el.style.fontSize = "initial";
+                    el.style.display = "none";
                     document.body.appendChild(el);
                     const fontSize = window.getComputedStyle(el).fontSize;
                     document.body.removeChild(el);
@@ -1441,7 +1442,7 @@ var Uno;
             getBBoxInternal(elementId) {
                 const element = this.getView(elementId);
                 let unconnectedRoot = null;
-                let cleanupUnconnectedRoot = (owner) => {
+                const cleanupUnconnectedRoot = (owner) => {
                     if (unconnectedRoot !== null) {
                         owner.removeChild(unconnectedRoot);
                     }
@@ -1450,6 +1451,7 @@ var Uno;
                     // On FireFox, the element needs to be connected to the DOM
                     // or the getBBox() will crash.
                     if (!element.isConnected) {
+                        unconnectedRoot = element;
                         while (unconnectedRoot.parentElement) {
                             // Need to find the top most "unconnected" parent
                             // of this element
@@ -1477,9 +1479,10 @@ var Uno;
                 *
                 * @param maxWidth string containing width in pixels. Empty string means infinite.
                 * @param maxHeight string containing height in pixels. Empty string means infinite.
+                * @param measureContent if we're interested by the content of the control (<img>'s image, <input>'s text...)
                 */
-            measureView(viewId, maxWidth, maxHeight) {
-                const ret = this.measureViewInternal(Number(viewId), maxWidth ? Number(maxWidth) : NaN, maxHeight ? Number(maxHeight) : NaN);
+            measureView(viewId, maxWidth, maxHeight, measureContent = true) {
+                const ret = this.measureViewInternal(Number(viewId), maxWidth ? Number(maxWidth) : NaN, maxHeight ? Number(maxHeight) : NaN, measureContent);
                 return `${ret[0]};${ret[1]}`;
             }
             /**
@@ -1490,7 +1493,7 @@ var Uno;
                 */
             measureViewNative(pParams, pReturn) {
                 const params = WindowManagerMeasureViewParams.unmarshal(pParams);
-                const ret = this.measureViewInternal(params.HtmlId, params.AvailableWidth, params.AvailableHeight);
+                const ret = this.measureViewInternal(params.HtmlId, params.AvailableWidth, params.AvailableHeight, params.MeasureContent);
                 const ret2 = new WindowManagerMeasureViewReturn();
                 ret2.DesiredWidth = ret[0];
                 ret2.DesiredHeight = ret[1];
@@ -1505,7 +1508,7 @@ var Uno;
                 // +1 is added to take rounding/flooring into account
                 return [resultWidth + 1, resultHeight];
             }
-            measureViewInternal(viewId, maxWidth, maxHeight) {
+            measureViewInternal(viewId, maxWidth, maxHeight, measureContent) {
                 const element = this.getView(viewId);
                 const elementStyle = element.style;
                 const elementClasses = element.className;
@@ -1514,7 +1517,7 @@ var Uno;
                 let parentElement = null;
                 let parentElementWidthHeight = null;
                 let unconnectedRoot = null;
-                let cleanupUnconnectedRoot = (owner) => {
+                const cleanupUnconnectedRoot = (owner) => {
                     if (unconnectedRoot !== null) {
                         owner.removeChild(unconnectedRoot);
                     }
@@ -1531,32 +1534,32 @@ var Uno;
                         }
                         this.containerElement.appendChild(unconnectedRoot);
                     }
-                    if (element instanceof HTMLImageElement) {
+                    if (measureContent && element instanceof HTMLImageElement) {
                         elementStyle.cssText = unconstrainedStyleCssText;
                         const imgElement = element;
                         return [imgElement.naturalWidth, imgElement.naturalHeight];
                     }
-                    else if (element instanceof HTMLInputElement) {
+                    else if (measureContent && element instanceof HTMLInputElement) {
                         elementStyle.cssText = unconstrainedStyleCssText;
                         const inputElement = element;
                         cleanupUnconnectedRoot(this.containerElement);
                         // Create a temporary element that will contain the input's content
-                        var textOnlyElement = document.createElement("p");
+                        const textOnlyElement = document.createElement("p");
                         textOnlyElement.style.cssText = unconstrainedStyleCssText;
                         textOnlyElement.innerText = inputElement.value;
                         textOnlyElement.className = elementClasses;
                         unconnectedRoot = textOnlyElement;
                         this.containerElement.appendChild(unconnectedRoot);
-                        var textSize = this.measureElement(textOnlyElement);
-                        var inputSize = this.measureElement(element);
+                        const textSize = this.measureElement(textOnlyElement);
+                        const inputSize = this.measureElement(element);
                         // Take the width of the inner text, but keep the height of the input element.
                         return [textSize[0], inputSize[1]];
                     }
-                    else if (element instanceof HTMLTextAreaElement) {
+                    else if (measureContent && element instanceof HTMLTextAreaElement) {
                         const inputElement = element;
                         cleanupUnconnectedRoot(this.containerElement);
                         // Create a temporary element that will contain the input's content
-                        var textOnlyElement = document.createElement("p");
+                        const textOnlyElement = document.createElement("p");
                         textOnlyElement.style.cssText = unconstrainedStyleCssText;
                         // If the input is null or empty, add a no-width character to force the paragraph to take up one line height
                         // The trailing new lines are going to be ignored for measure, so we also append no-width char at the end.
@@ -1564,10 +1567,10 @@ var Uno;
                         textOnlyElement.className = elementClasses; // Note: Here we will have the uno-textBoxView class name
                         unconnectedRoot = textOnlyElement;
                         this.containerElement.appendChild(unconnectedRoot);
-                        var textSize = this.measureElement(textOnlyElement);
+                        const textSize = this.measureElement(textOnlyElement);
                         // For TextAreas, take the width and height of the inner text
                         const width = Math.min(textSize[0], maxWidth);
-                        var height = Math.min(textSize[1], maxHeight);
+                        const height = Math.min(textSize[1], maxHeight);
                         return [width, height];
                     }
                     else {
@@ -1662,20 +1665,20 @@ var Uno;
                 const element = this.getView(viewId);
                 if (element.tagName.toUpperCase() === "IMG") {
                     const imgElement = element;
-                    var img = new Image();
+                    const img = new Image();
                     img.onload = buildMonochromeImage;
                     img.src = url;
                     function buildMonochromeImage() {
                         // create a colored version of img
-                        const c = document.createElement('canvas');
-                        const ctx = c.getContext('2d');
+                        const c = document.createElement("canvas");
+                        const ctx = c.getContext("2d");
                         c.width = img.width;
                         c.height = img.height;
                         ctx.drawImage(img, 0, 0);
-                        ctx.globalCompositeOperation = 'source-atop';
+                        ctx.globalCompositeOperation = "source-atop";
                         ctx.fillStyle = color;
                         ctx.fillRect(0, 0, img.width, img.height);
-                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.globalCompositeOperation = "source-over";
                         imgElement.src = c.toDataURL();
                     }
                     return "ok";
@@ -1896,7 +1899,7 @@ var Uno;
                 return handle + "";
             }
             numberToCssColor(color) {
-                return "#" + color.toString(16).padStart(8, '0');
+                return "#" + color.toString(16).padStart(8, "0");
             }
             setCursor(cssCursor) {
                 const unoBody = document.getElementById(this.containerElementId);
@@ -2014,11 +2017,27 @@ var Uno;
                             }
                         })
                             .catch(err => {
-                            AsyncInteropHelper.dispatchErrorMethod(handle, err);
+                            if (typeof err == "string") {
+                                AsyncInteropHelper.dispatchErrorMethod(handle, err);
+                            }
+                            else if (err.message && err.stack) {
+                                AsyncInteropHelper.dispatchErrorMethod(handle, err.message + "\n" + err.stack);
+                            }
+                            else {
+                                AsyncInteropHelper.dispatchErrorMethod(handle, "" + err);
+                            }
                         });
                     }
                     catch (err) {
-                        AsyncInteropHelper.dispatchErrorMethod(handle, err);
+                        if (typeof err == "string") {
+                            AsyncInteropHelper.dispatchErrorMethod(handle, err);
+                        }
+                        else if (err.message && err.stack) {
+                            AsyncInteropHelper.dispatchErrorMethod(handle, err.message + "\n" + err.stack);
+                        }
+                        else {
+                            AsyncInteropHelper.dispatchErrorMethod(handle, "" + err);
+                        }
                     }
                 }
             }
@@ -2151,6 +2170,167 @@ var Windows;
                 }
             }
             DataTransfer.DataTransferManager = DataTransferManager;
+        })(DataTransfer = ApplicationModel.DataTransfer || (ApplicationModel.DataTransfer = {}));
+    })(ApplicationModel = Windows.ApplicationModel || (Windows.ApplicationModel = {}));
+})(Windows || (Windows = {}));
+var Windows;
+(function (Windows) {
+    var ApplicationModel;
+    (function (ApplicationModel) {
+        var DataTransfer;
+        (function (DataTransfer) {
+            var DragDrop;
+            (function (DragDrop) {
+                var Core;
+                (function (Core) {
+                    class DragDropExtension {
+                        constructor() {
+                            // Events fired on the drop target
+                            // Note: dragenter and dragover events will enable drop on the app
+                            this._dropHandler = this.dispatchDropEvent.bind(this);
+                            document.addEventListener("dragenter", this._dropHandler);
+                            document.addEventListener("dragover", this._dropHandler);
+                            document.addEventListener("dragleave", this._dropHandler); // Seems to be raised also on drop?
+                            document.addEventListener("drop", this._dropHandler);
+                            // Events fired on the draggable target (the source element)
+                            //this._dragHandler = this.dispatchDragEvent.bind(this);
+                            //document.addEventListener("dragstart", this._dragHandler);
+                            //document.addEventListener("drag", this._dragHandler);
+                            //document.addEventListener("dragend", this._dragHandler);
+                        }
+                        static enable(pArgs) {
+                            if (!DragDropExtension._dispatchDropEventMethod) {
+                                DragDropExtension._dispatchDropEventMethod = Module.mono_bind_static_method("[Uno.UI] Windows.ApplicationModel.DataTransfer.DragDrop.Core.DragDropExtension:OnNativeDropEvent");
+                            }
+                            if (DragDropExtension._current) {
+                                throw new Error("A DragDropExtension has already been enabled");
+                            }
+                            DragDropExtension._dispatchDragDropArgs = pArgs;
+                            DragDropExtension._nextDropId = 1;
+                            DragDropExtension._current = new DragDropExtension();
+                        }
+                        static disable(pArgs) {
+                            if (DragDropExtension._dispatchDragDropArgs != pArgs) {
+                                throw new Error("The current DragDropExtension does not match the provided args");
+                            }
+                            DragDropExtension._current.dispose();
+                            DragDropExtension._current = null;
+                            DragDropExtension._dispatchDragDropArgs = null;
+                        }
+                        dispose() {
+                            // Events fired on the drop target
+                            document.removeEventListener("dragenter", this._dropHandler);
+                            document.removeEventListener("dragover", this._dropHandler);
+                            document.removeEventListener("dragleave", this._dropHandler); // Seems to be raised also on drop?
+                            document.removeEventListener("drop", this._dropHandler);
+                        }
+                        dispatchDropEvent(evt) {
+                            if (evt.type == "dragleave"
+                                && evt.clientX > 0
+                                && evt.clientX < document.documentElement.clientWidth
+                                && evt.clientY > 0
+                                && evt.clientY < document.documentElement.clientHeight) {
+                                // We ignore all dragleave while if pointer is still over the window.
+                                // This is to mute bubbling of drag leave when crossing boundaries of any elements on the app.
+                                return;
+                            }
+                            if (evt.type == "dragenter") {
+                                if (this._pendingDropId > 0) {
+                                    // For the same reason as above, we ignore all dragenter if there is already a pending active drop
+                                    return;
+                                }
+                                this._pendingDropId = ++DragDropExtension._nextDropId;
+                            }
+                            // We must keep a reference to the dataTransfer in order to be able to retrieve data items
+                            this._pendingDropData = evt.dataTransfer;
+                            // Prepare args
+                            let args = new DragDropExtensionEventArgs();
+                            args.id = this._pendingDropId;
+                            args.eventName = evt.type;
+                            args.timestamp = evt.timeStamp;
+                            args.x = evt.clientX;
+                            args.y = evt.clientY;
+                            args.buttons = evt.buttons;
+                            args.shift = evt.shiftKey;
+                            args.ctrl = evt.ctrlKey;
+                            args.alt = evt.altKey;
+                            if (evt.type == "dragenter") { // We use the dataItems only for enter, no needs to copy them every time!
+                                const items = new Array();
+                                for (let itemId = 0; itemId < evt.dataTransfer.items.length; itemId++) {
+                                    const item = evt.dataTransfer.items[itemId];
+                                    items.push({ id: itemId, kind: item.kind, type: item.type });
+                                }
+                                args.dataItems = JSON.stringify(items);
+                                args.allowedOperations = evt.dataTransfer.effectAllowed;
+                            }
+                            else {
+                                // Must be set for marshaling
+                                args.dataItems = "";
+                                args.allowedOperations = "";
+                            }
+                            args.acceptedOperation = evt.dataTransfer.dropEffect;
+                            try {
+                                // Raise the managed event
+                                args.marshal(DragDropExtension._dispatchDragDropArgs);
+                                DragDropExtension._dispatchDropEventMethod();
+                                // Read response from managed code
+                                args = DragDropExtensionEventArgs.unmarshal(DragDropExtension._dispatchDragDropArgs);
+                                evt.dataTransfer.dropEffect = (args.acceptedOperation);
+                            }
+                            finally {
+                                // No matter if the managed code handled the event, we want to prevent thee default behavior (like opening a drop link)
+                                evt.preventDefault();
+                                if (evt.type == "dragleave" || evt.type == "drop") {
+                                    this._pendingDropData = null;
+                                    this._pendingDropId = 0;
+                                }
+                            }
+                        }
+                        static async retrieveText(itemId) {
+                            const current = DragDropExtension._current;
+                            const data = current === null || current === void 0 ? void 0 : current._pendingDropData;
+                            if (data == null) {
+                                throw new Error("No pending drag and drop data.");
+                            }
+                            return new Promise((resolve, reject) => {
+                                const item = data.items[itemId];
+                                const timeout = setTimeout(() => reject("Timeout: for security reason, you cannot access data before drop."), 15000);
+                                item.getAsString(str => {
+                                    clearTimeout(timeout);
+                                    resolve(str);
+                                });
+                            });
+                        }
+                        static async retrieveFiles(itemIds) {
+                            var _a;
+                            const data = (_a = DragDropExtension._current) === null || _a === void 0 ? void 0 : _a._pendingDropData;
+                            if (data == null) {
+                                throw new Error("No pending drag and drop data.");
+                            }
+                            const fileHandles = [];
+                            if (Array.isArray(itemIds)) {
+                                for (const id of itemIds) {
+                                    fileHandles.push(await DragDropExtension.getAsFile(data.items[id]));
+                                }
+                            }
+                            else {
+                                fileHandles.push(await DragDropExtension.getAsFile(data.items[itemIds]));
+                            }
+                            const infos = Uno.Storage.NativeStorageItem.getInfos(...fileHandles);
+                            return JSON.stringify(infos);
+                        }
+                        static async getAsFile(item) {
+                            if (item.getAsFileSystemHandle) {
+                                return await item.getAsFileSystemHandle();
+                            }
+                            else {
+                                return item.getAsFile();
+                            }
+                        }
+                    }
+                    Core.DragDropExtension = DragDropExtension;
+                })(Core = DragDrop.Core || (DragDrop.Core = {}));
+            })(DragDrop = DataTransfer.DragDrop || (DataTransfer.DragDrop = {}));
         })(DataTransfer = ApplicationModel.DataTransfer || (ApplicationModel.DataTransfer = {}));
     })(ApplicationModel = Windows.ApplicationModel || (Windows.ApplicationModel = {}));
 })(Windows || (Windows = {}));
@@ -3149,8 +3329,7 @@ var Uno;
     (function (Storage) {
         class NativeStorageFile {
             static async getBasicPropertiesAsync(guid) {
-                const handle = Storage.NativeStorageItem.getHandle(guid);
-                var file = await handle.getFile();
+                const file = await Storage.NativeStorageItem.getFile(guid);
                 var propertyString = "";
                 propertyString += file.size;
                 propertyString += "|";
@@ -3180,7 +3359,7 @@ var Uno;
              */
             static async createFolderAsync(parentGuid, folderName) {
                 try {
-                    const parentHandle = Storage.NativeStorageItem.getHandle(parentGuid);
+                    const parentHandle = Storage.NativeStorageItem.getItem(parentGuid);
                     const newDirectoryHandle = await parentHandle.getDirectoryHandle(folderName, {
                         create: true,
                     });
@@ -3199,7 +3378,7 @@ var Uno;
              */
             static async createFileAsync(parentGuid, fileName) {
                 try {
-                    const parentHandle = Storage.NativeStorageItem.getHandle(parentGuid);
+                    const parentHandle = Storage.NativeStorageItem.getItem(parentGuid);
                     const newFileHandle = await parentHandle.getFileHandle(fileName, {
                         create: true,
                     });
@@ -3218,7 +3397,7 @@ var Uno;
              * @returns A GUID of the folder if found, otherwise null.
              */
             static async tryGetFolderAsync(parentGuid, folderName) {
-                const parentHandle = Storage.NativeStorageItem.getHandle(parentGuid);
+                const parentHandle = Storage.NativeStorageItem.getItem(parentGuid);
                 let nestedDirectoryHandle = undefined;
                 try {
                     nestedDirectoryHandle = await parentHandle.getDirectoryHandle(folderName);
@@ -3238,7 +3417,7 @@ var Uno;
             * @returns A GUID of the folder if found, otherwise null.
             */
             static async tryGetFileAsync(parentGuid, fileName) {
-                const parentHandle = Storage.NativeStorageItem.getHandle(parentGuid);
+                const parentHandle = Storage.NativeStorageItem.getItem(parentGuid);
                 let fileHandle = undefined;
                 try {
                     fileHandle = await parentHandle.getFileHandle(fileName);
@@ -3253,7 +3432,7 @@ var Uno;
             }
             static async deleteItemAsync(parentGuid, itemName) {
                 try {
-                    const parentHandle = Storage.NativeStorageItem.getHandle(parentGuid);
+                    const parentHandle = Storage.NativeStorageItem.getItem(parentGuid);
                     await parentHandle.removeEntry(itemName, { recursive: true });
                     return "OK";
                 }
@@ -3283,7 +3462,7 @@ var Uno;
             }
             static async getEntriesAsync(guid, includeFiles, includeDirectories) {
                 var e_1, _a, e_2, _b;
-                const folderHandle = Storage.NativeStorageItem.getHandle(guid);
+                const folderHandle = Storage.NativeStorageItem.getItem(guid);
                 var entries = [];
                 // Default to "modern" implementation
                 if (folderHandle.values) {
@@ -3340,57 +3519,70 @@ var Uno;
     var Storage;
     (function (Storage) {
         class NativeStorageItem {
-            static addHandle(guid, handle) {
-                NativeStorageItem._guidToHandleMap.set(guid, handle);
-                NativeStorageItem._handleToGuidMap.set(handle, guid);
+            static addItem(guid, item) {
+                NativeStorageItem._guidToItemMap.set(guid, item);
+                NativeStorageItem._itemToGuidMap.set(item, guid);
             }
-            static removeHandle(guid) {
-                const handle = NativeStorageItem._guidToHandleMap.get(guid);
-                NativeStorageItem._guidToHandleMap.delete(guid);
-                NativeStorageItem._handleToGuidMap.delete(handle);
+            static removeItem(guid) {
+                const handle = NativeStorageItem._guidToItemMap.get(guid);
+                NativeStorageItem._guidToItemMap.delete(guid);
+                NativeStorageItem._itemToGuidMap.delete(handle);
             }
-            static getHandle(guid) {
-                return NativeStorageItem._guidToHandleMap.get(guid);
+            static getItem(guid) {
+                return NativeStorageItem._guidToItemMap.get(guid);
             }
-            static getGuid(handle) {
-                return NativeStorageItem._handleToGuidMap.get(handle);
+            static async getFile(guid) {
+                const item = NativeStorageItem.getItem(guid);
+                if (item instanceof File) {
+                    return item;
+                }
+                if (item instanceof FileSystemFileHandle) {
+                    return await item.getFile();
+                }
+                if (item instanceof FileSystemDirectoryHandle) {
+                    throw new Error("Item " + guid + " is a directory handle. You cannot use it as a File!");
+                }
+                throw new Error("Item " + guid + " is of an unknown type. You cannot use it as a File!");
             }
-            static getInfos(...handles) {
-                var handlesWithoutGuids = [];
-                for (var handle of handles) {
-                    var guid = NativeStorageItem.getGuid(handle);
+            static getGuid(item) {
+                return NativeStorageItem._itemToGuidMap.get(item);
+            }
+            static getInfos(...items) {
+                const itemsWithoutGuids = [];
+                for (const item of items) {
+                    const guid = NativeStorageItem.getGuid(item);
                     if (!guid) {
-                        handlesWithoutGuids.push(handle);
+                        itemsWithoutGuids.push(item);
                     }
                 }
-                NativeStorageItem.storeHandles(handlesWithoutGuids);
-                var results = [];
-                for (var handle of handles) {
-                    var guid = NativeStorageItem.getGuid(handle);
-                    var info = new Storage.NativeStorageItemInfo();
+                NativeStorageItem.storeItems(itemsWithoutGuids);
+                const results = [];
+                for (const item of items) {
+                    const guid = NativeStorageItem.getGuid(item);
+                    const info = new Storage.NativeStorageItemInfo();
                     info.id = guid;
-                    info.name = handle.name;
-                    info.isFile = handle.kind === "file";
+                    info.name = item.name;
+                    info.isFile = item instanceof File || item.kind === "file";
                     results.push(info);
                 }
                 return results;
             }
-            static storeHandles(handles) {
-                var missingGuids = NativeStorageItem.generateGuids(handles.length);
-                for (var i = 0; i < handles.length; i++) {
-                    NativeStorageItem.addHandle(missingGuids[i], handles[i]);
+            static storeItems(handles) {
+                const missingGuids = NativeStorageItem.generateGuids(handles.length);
+                for (let i = 0; i < handles.length; i++) {
+                    NativeStorageItem.addItem(missingGuids[i], handles[i]);
                 }
             }
             static generateGuids(count) {
                 if (!NativeStorageItem.generateGuidBinding) {
                     NativeStorageItem.generateGuidBinding = Module.mono_bind_static_method("[Uno] Uno.Storage.NativeStorageItem:GenerateGuids");
                 }
-                var guids = NativeStorageItem.generateGuidBinding(count);
+                const guids = NativeStorageItem.generateGuidBinding(count);
                 return guids.split(";");
             }
         }
-        NativeStorageItem._guidToHandleMap = new Map();
-        NativeStorageItem._handleToGuidMap = new Map();
+        NativeStorageItem._guidToItemMap = new Map();
+        NativeStorageItem._itemToGuidMap = new Map();
         Storage.NativeStorageItem = NativeStorageItem;
     })(Storage = Uno.Storage || (Uno.Storage = {}));
 })(Uno || (Uno = {}));
@@ -3703,8 +3895,7 @@ var Uno;
                     this._file = file;
                 }
                 static async openAsync(streamId, fileId) {
-                    const handle = Storage.NativeStorageItem.getHandle(fileId);
-                    const file = await handle.getFile();
+                    const file = await Storage.NativeStorageItem.getFile(fileId);
                     const fileSize = file.size;
                     const stream = new NativeFileReadStream(file);
                     NativeFileReadStream._streamMap.set(streamId, stream);
@@ -3767,17 +3958,19 @@ var Uno;
                     this._stream = stream;
                 }
                 static async openAsync(streamId, fileId) {
-                    const handle = Storage.NativeStorageItem.getHandle(fileId);
-                    if (await NativeFileWriteStream.verifyPermissionAsync(handle)) {
-                        const writableStream = await handle.createWritable({ keepExistingData: true });
-                        const fileSize = (await handle.getFile()).size;
-                        const stream = new NativeFileWriteStream(writableStream);
-                        NativeFileWriteStream._streamMap.set(streamId, stream);
-                        return fileSize.toString();
-                    }
-                    else {
+                    const item = Storage.NativeStorageItem.getItem(fileId);
+                    if (item instanceof File) {
                         return "PermissionNotGranted";
                     }
+                    const handle = item;
+                    if (!await NativeFileWriteStream.verifyPermissionAsync(handle)) {
+                        return "PermissionNotGranted";
+                    }
+                    const writableStream = await handle.createWritable({ keepExistingData: true });
+                    const fileSize = (await handle.getFile()).size;
+                    const stream = new NativeFileWriteStream(writableStream);
+                    NativeFileWriteStream._streamMap.set(streamId, stream);
+                    return fileSize.toString();
                 }
                 static async verifyPermissionAsync(fileHandle) {
                     const options = {};
@@ -4042,6 +4235,28 @@ var Windows;
             }
             Core.SystemNavigationManager = SystemNavigationManager;
         })(Core = UI.Core || (UI.Core = {}));
+    })(UI = Windows.UI || (Windows.UI = {}));
+})(Windows || (Windows = {}));
+var Windows;
+(function (Windows) {
+    var UI;
+    (function (UI) {
+        var Notifications;
+        (function (Notifications) {
+            class BadgeUpdater {
+                static setNumber(value) {
+                    if (navigator.setAppBadge) {
+                        navigator.setAppBadge(value);
+                    }
+                }
+                static clear() {
+                    if (navigator.clearAppBadge) {
+                        navigator.clearAppBadge();
+                    }
+                }
+            }
+            Notifications.BadgeUpdater = BadgeUpdater;
+        })(Notifications = UI.Notifications || (UI.Notifications = {}));
     })(UI = Windows.UI || (Windows.UI = {}));
 })(Windows || (Windows = {}));
 var Windows;
@@ -4498,6 +4713,107 @@ class ApplicationDataContainer_TryGetValueReturn {
     }
 }
 /* TSBindingsGenerator Generated code -- this code is regenerated on each build */
+class DragDropExtensionEventArgs {
+    static unmarshal(pData) {
+        const ret = new DragDropExtensionEventArgs();
+        {
+            const ptr = Module.getValue(pData + 0, "*");
+            if (ptr !== 0) {
+                ret.eventName = String(Module.UTF8ToString(ptr));
+            }
+            else {
+                ret.eventName = null;
+            }
+        }
+        {
+            const ptr = Module.getValue(pData + 4, "*");
+            if (ptr !== 0) {
+                ret.allowedOperations = String(Module.UTF8ToString(ptr));
+            }
+            else {
+                ret.allowedOperations = null;
+            }
+        }
+        {
+            const ptr = Module.getValue(pData + 8, "*");
+            if (ptr !== 0) {
+                ret.acceptedOperation = String(Module.UTF8ToString(ptr));
+            }
+            else {
+                ret.acceptedOperation = null;
+            }
+        }
+        {
+            const ptr = Module.getValue(pData + 12, "*");
+            if (ptr !== 0) {
+                ret.dataItems = String(Module.UTF8ToString(ptr));
+            }
+            else {
+                ret.dataItems = null;
+            }
+        }
+        {
+            ret.timestamp = Number(Module.getValue(pData + 16, "double"));
+        }
+        {
+            ret.x = Number(Module.getValue(pData + 24, "double"));
+        }
+        {
+            ret.y = Number(Module.getValue(pData + 32, "double"));
+        }
+        {
+            ret.id = Number(Module.getValue(pData + 40, "i32"));
+        }
+        {
+            ret.buttons = Number(Module.getValue(pData + 44, "i32"));
+        }
+        {
+            ret.shift = Boolean(Module.getValue(pData + 48, "i32"));
+        }
+        {
+            ret.ctrl = Boolean(Module.getValue(pData + 52, "i32"));
+        }
+        {
+            ret.alt = Boolean(Module.getValue(pData + 56, "i32"));
+        }
+        return ret;
+    }
+    marshal(pData) {
+        {
+            const stringLength = lengthBytesUTF8(this.eventName);
+            const pString = Module._malloc(stringLength + 1);
+            stringToUTF8(this.eventName, pString, stringLength + 1);
+            Module.setValue(pData + 0, pString, "*");
+        }
+        {
+            const stringLength = lengthBytesUTF8(this.allowedOperations);
+            const pString = Module._malloc(stringLength + 1);
+            stringToUTF8(this.allowedOperations, pString, stringLength + 1);
+            Module.setValue(pData + 4, pString, "*");
+        }
+        {
+            const stringLength = lengthBytesUTF8(this.acceptedOperation);
+            const pString = Module._malloc(stringLength + 1);
+            stringToUTF8(this.acceptedOperation, pString, stringLength + 1);
+            Module.setValue(pData + 8, pString, "*");
+        }
+        {
+            const stringLength = lengthBytesUTF8(this.dataItems);
+            const pString = Module._malloc(stringLength + 1);
+            stringToUTF8(this.dataItems, pString, stringLength + 1);
+            Module.setValue(pData + 12, pString, "*");
+        }
+        Module.setValue(pData + 16, this.timestamp, "double");
+        Module.setValue(pData + 24, this.x, "double");
+        Module.setValue(pData + 32, this.y, "double");
+        Module.setValue(pData + 40, this.id, "i32");
+        Module.setValue(pData + 44, this.buttons, "i32");
+        Module.setValue(pData + 48, this.shift, "i32");
+        Module.setValue(pData + 52, this.ctrl, "i32");
+        Module.setValue(pData + 56, this.alt, "i32");
+    }
+}
+/* TSBindingsGenerator Generated code -- this code is regenerated on each build */
 class StorageFolderMakePersistentParams {
     static unmarshal(pData) {
         const ret = new StorageFolderMakePersistentParams();
@@ -4682,6 +4998,9 @@ class WindowManagerMeasureViewParams {
         }
         {
             ret.AvailableHeight = Number(Module.getValue(pData + 16, "double"));
+        }
+        {
+            ret.MeasureContent = Boolean(Module.getValue(pData + 24, "i32"));
         }
         return ret;
     }

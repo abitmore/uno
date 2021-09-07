@@ -497,8 +497,9 @@ declare namespace Uno.UI {
             *
             * @param maxWidth string containing width in pixels. Empty string means infinite.
             * @param maxHeight string containing height in pixels. Empty string means infinite.
+            * @param measureContent if we're interested by the content of the control (<img>'s image, <input>'s text...)
             */
-        measureView(viewId: string, maxWidth: string, maxHeight: string): string;
+        measureView(viewId: string, maxWidth: string, maxHeight: string, measureContent?: boolean): string;
         /**
             * Use the Html engine to measure the element using specified constraints.
             *
@@ -698,6 +699,25 @@ declare namespace Windows.ApplicationModel.DataTransfer {
     class DataTransferManager {
         static isSupported(): boolean;
         static showShareUI(title: string, text: string, url: string): Promise<string>;
+    }
+}
+declare namespace Windows.ApplicationModel.DataTransfer.DragDrop.Core {
+    class DragDropExtension {
+        private static _dispatchDropEventMethod;
+        private static _dispatchDragDropArgs;
+        private static _current;
+        private static _nextDropId;
+        private _dropHandler;
+        private _pendingDropId;
+        private _pendingDropData;
+        static enable(pArgs: number): void;
+        static disable(pArgs: number): void;
+        constructor();
+        dispose(): void;
+        private dispatchDropEvent;
+        static retrieveText(itemId: number): Promise<string>;
+        static retrieveFiles(itemIds: number | number[]): Promise<string>;
+        private static getAsFile;
     }
 }
 declare namespace Uno.Devices.Enumeration.Internal.Providers.Midi {
@@ -979,14 +999,15 @@ declare namespace Uno.Storage {
 declare namespace Uno.Storage {
     class NativeStorageItem {
         private static generateGuidBinding;
-        private static _guidToHandleMap;
-        private static _handleToGuidMap;
-        static addHandle(guid: string, handle: FileSystemHandle): void;
-        static removeHandle(guid: string): void;
-        static getHandle(guid: string): FileSystemHandle;
-        static getGuid(handle: FileSystemHandle): string;
-        static getInfos(...handles: FileSystemHandle[]): NativeStorageItemInfo[];
-        private static storeHandles;
+        private static _guidToItemMap;
+        private static _itemToGuidMap;
+        static addItem(guid: string, item: FileSystemHandle | File): void;
+        static removeItem(guid: string): void;
+        static getItem(guid: string): FileSystemHandle | File;
+        static getFile(guid: string): Promise<File>;
+        static getGuid(item: FileSystemHandle | File): string;
+        static getInfos(...items: Array<FileSystemHandle | File>): NativeStorageItemInfo[];
+        private static storeItems;
         private static generateGuids;
     }
 }
@@ -1132,6 +1153,16 @@ declare namespace Windows.UI.Core {
         private clearStack;
     }
 }
+interface Navigator {
+    setAppBadge(value: number): void;
+    clearAppBadge(): void;
+}
+declare namespace Windows.UI.Notifications {
+    class BadgeUpdater {
+        static setNumber(value: number): void;
+        static clear(): void;
+    }
+}
 declare namespace Windows.UI.ViewManagement {
     class ApplicationView {
         static setFullScreenMode(turnOn: boolean): boolean;
@@ -1243,6 +1274,22 @@ declare class ApplicationDataContainer_TryGetValueReturn {
     HasValue: boolean;
     marshal(pData: number): void;
 }
+declare class DragDropExtensionEventArgs {
+    eventName: string;
+    allowedOperations: string;
+    acceptedOperation: string;
+    dataItems: string;
+    timestamp: number;
+    x: number;
+    y: number;
+    id: number;
+    buttons: number;
+    shift: boolean;
+    ctrl: boolean;
+    alt: boolean;
+    static unmarshal(pData: number): DragDropExtensionEventArgs;
+    marshal(pData: number): void;
+}
 declare class StorageFolderMakePersistentParams {
     Paths_Length: number;
     Paths: Array<string>;
@@ -1311,6 +1358,7 @@ declare class WindowManagerMeasureViewParams {
     HtmlId: number;
     AvailableWidth: number;
     AvailableHeight: number;
+    MeasureContent: boolean;
     static unmarshal(pData: number): WindowManagerMeasureViewParams;
 }
 declare class WindowManagerMeasureViewReturn {
