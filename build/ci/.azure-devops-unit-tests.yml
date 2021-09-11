@@ -43,7 +43,9 @@ jobs:
 
   - task: MSBuild@1
     inputs:
-      solution: src/**/*.Tests.csproj
+      solution: |
+        src/**/*.Tests.csproj
+        !**/*Wasm.Tests.dll
       msbuildArguments: /r /p:CheckExclusions=True /p:Configuration=Release /nodeReuse:true /detailedsummary /m $(ADDITIONAL_FLAGS) # /bl:$(build.artifactstagingdirectory)\build.binlog
 
   - task: VisualStudioTestPlatformInstaller@1
