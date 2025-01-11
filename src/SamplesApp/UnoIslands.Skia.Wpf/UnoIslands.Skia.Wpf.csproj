@@ -1,12 +1,14 @@
-﻿<Project Sdk="MSBuild.Sdk.Extras">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFrameworks>$(NetPrevious)-windows;$(NetCurrent)-windows</TargetFrameworks>
+		<TargetFrameworks>$(NetWpfPreviousAndCurrent)</TargetFrameworks>
 
 		<!--
 		Enable implicit dotnet runtime forward rolling, as a net5
 		project may run with net6 only SDK installed
 		-->
 		<RollForward>Major</RollForward>
+
+		<PreBuildUnoUITasks>true</PreBuildUnoUITasks>
 	</PropertyGroup>
 
 	<Import Project="../../targetframework-override-windows.props" />
@@ -22,15 +24,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="TestData.json" />
+		<None Remove="TestData.json" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Include="TestData.json" />
+		<EmbeddedResource Include="TestData.json" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="MSTest.TestFramework" Version="2.1.2" />
+		<PackageReference Include="MSTest.TestFramework" />
+		<PackageReference Include="MSTest.Analyzers" />
 		<PackageReference Include="SkiaSharp.Views.WPF" Version="2.80.3" />
 	</ItemGroup>
 
@@ -61,13 +64,19 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Update="Properties\Resources.Designer.cs">
-	    <DesignTime>True</DesignTime>
-	  </Compile>
+		<Compile Update="Properties\Resources.Designer.cs">
+			<DesignTime>True</DesignTime>
+		</Compile>
 	</ItemGroup>
 
-	<Import Project="..\..\..\build\nuget\*.Skia.Wpf.props" />
-	<Import Project="..\..\..\build\nuget\*.Skia.Wpf.targets" />
+	<PropertyGroup>
+		<UnoUIMSBuildTasksPath>$(MSBuildThisFileDirectory)..\..\SourceGenerators\Uno.UI.Tasks\bin\$(Configuration)_Shadow</UnoUIMSBuildTasksPath>
+	</PropertyGroup>
+
+	<Import Project="..\..\SourceGenerators\Uno.UI.Tasks\Content\Uno.UI.Tasks.targets" Condition="'$(SkipUnoResourceGeneration)' == '' " />
+
+	<Import Project="..\..\Uno.UI.Runtime.Skia.Wpf\buildTransitive\*.Runtime.Skia.Wpf.props" />
+	<Import Project="..\..\Uno.UI.Runtime.Skia.Wpf\buildTransitive\*.Runtime.Skia.Wpf.targets" />
 	<Import Project="..\..\..\build\nuget\uno.winui.runtime-replace.targets" />
 
 </Project>

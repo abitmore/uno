@@ -1,20 +1,23 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Windows.Globalization;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MUXControlsTestApp.Utilities;
 using Private.Infrastructure;
 using Uno.Extensions;
-using Windows.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media;
 using Uno.Disposables;
 using Windows.Globalization.DateTimeFormatting;
-using Windows.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Markup;
 using Windows.Foundation;
 using FluentAssertions;
 using FluentAssertions.Execution;
+using Uno.UI.RuntimeTests.Helpers;
 using Uno.UI.RuntimeTests.MUX.Helpers;
+using System.Threading;
+
 
 #if HAS_UNO
 using Uno.Foundation.Logging;
@@ -27,16 +30,17 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 	[TestClass]
 	public class DatePickerIntegrationTests
 	{
-		private const long DEFAULT_DATE_TICKS = 504910368000000000;
+		// https://github.com/microsoft/CsWinRT/blob/7dc82799c7afeaf862c9fb7af78ad0e2fc03c48e/src/WinRT.Runtime/Projections/SystemTypes.cs#L71
+		private const long ManagedUtcTicksAtNativeZero = 504911232000000000;
 
 		[TestInitialize]
-		void ClassSetup()
+		public void ClassSetup()
 		{
 			TestServices.EnsureInitialized();
 		}
 
 		[TestCleanup]
-		void TestCleanup()
+		public void TestCleanup()
 		{
 			TestServices.WindowHelper.VerifyTestCleanup();
 
@@ -103,7 +107,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 				today.SetToNow();
 
 				// Default value of Date should be the null sentinel value.
-				datePicker.Date.Ticks.Should().Be(DEFAULT_DATE_TICKS); // 1600-12-31, as per MS documentation
+				datePicker.Date.WindowsFoundationUniversalTime().Should().Be(0);
 				datePicker.SelectedDate.Should().BeNull();
 
 				// Default value of MinYear should be 100 years ago.
@@ -124,6 +128,9 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 			var datePickerValueChangedEvent = new TaskCompletionSource<object>();
 
 			var datePicker = await SetupDatePickerTest();
+
+			var cts = new CancellationTokenSource(1000);
+			cts.Token.Register(() => datePickerValueChangedEvent.TrySetException(new TimeoutException()));
 
 			await RunOnUIThread.ExecuteAsync(() =>
 			{
@@ -213,6 +220,8 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 
 			var dateChangedEvent = new TaskCompletionSource<object>();
 
+			var cts = new CancellationTokenSource(1000);
+			cts.Token.Register(() => dateChangedEvent.TrySetException(new TimeoutException()));
 
 			datePicker.DateChanged += OnDatePickerOnDateChanged;
 
@@ -242,6 +251,9 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 			DatePicker datePicker = null;
 
 			var loadedEvent = new TaskCompletionSource<object>();
+
+			var cts = new CancellationTokenSource(1000);
+			cts.Token.Register(() => loadedEvent.TrySetException(new TimeoutException()));
 
 			await RunOnUIThread.ExecuteAsync(() =>
 			{
@@ -287,7 +299,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 		{
 			// This forces the app to use the specified language/locale:
 			this.Log().InfoFormat("VerifyDayMonthYearOrder: Setting ApplicationLanguages.PrimaryLanguageOverride to {0}", locale);
-			Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = locale;
+			global::Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = locale;
 
 			var datePicker = await SetupDatePickerTest();
 			await TestServices.WindowHelper.WaitForIdle();
@@ -440,6 +452,10 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 			var datePicker = await SetupDatePickerTest();
 
 			var dateChangedEvent = new TaskCompletionSource<object>();
+
+			var cts = new CancellationTokenSource(1000);
+			cts.Token.Register(() => dateChangedEvent.TrySetException(new TimeoutException()));
+
 			var dateChangedRegistration = CreateSafeEventRegistration(DatePicker, DateChanged);
 			dateChangedRegistration.Attach(datePicker, [&]() {
 				dateChangedEvent.Set();
@@ -745,7 +761,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 
 			await RunOnUIThread.ExecuteAsync(() =>
 			{
-#if NETFX_CORE
+#if WINAPPSDK
 				var flyoutPopup = VisualTreeHelper.GetOpenPopups(Window.Current)[0];
 #else
 				var flyoutPopup = VisualTreeHelper.GetOpenPopupsForXamlRoot(datePicker.XamlRoot)[0];
@@ -792,6 +808,9 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 			calendar.Period = 1;
 
 			var dateChangedEvent = new TaskCompletionSource<object>();
+
+			var cts = new CancellationTokenSource(1000);
+			cts.Token.Register(() => dateChangedEvent.TrySetException(new TimeoutException()));
 
 			await RunOnUIThread.ExecuteAsync(() =>
 			{
@@ -991,7 +1010,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 				this.Log().Info("Setting SelectedDate to null.  Date should be the null sentinel value.");
 				datePicker.SelectedDate = null;
 
-				datePicker.Date.Ticks.Should().Be(DEFAULT_DATE_TICKS);
+				datePicker.Date.WindowsFoundationUniversalTime().Should().Be(0);
 
 				this.Log().Info("Setting SelectedDate to February 2, 2018. Date should change to this value.");
 				datePicker.SelectedDate = (date2);
@@ -1008,7 +1027,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 				VerifyDatesAreEqual(date, datePicker.SelectedDate.Value);
 
 				this.Log().Info("Setting Date to the null sentinel value. SelectedDate should become null.");
-				datePicker.Date = new DateTimeOffset(DEFAULT_DATE_TICKS, TimeSpan.Zero);
+				datePicker.Date = new DateTimeOffset(ManagedUtcTicksAtNativeZero, TimeSpan.Zero).ToLocalTime();
 
 				datePicker.SelectedDate.Should().BeNull("SelectedDate should be back to null");
 			});
@@ -1081,7 +1100,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 			{
 				datePicker.CalendarIdentifier = "JapaneseCalendar";
 
-				datePicker.Date.Ticks.Should().Be(DEFAULT_DATE_TICKS);
+				datePicker.Date.WindowsFoundationUniversalTime().Should().Be(0);
 
 				this.Log().Info("Setting SelectedDate to January 9, 2019. Date should change to this value.");
 				datePicker.SelectedDate = (date);
@@ -1091,7 +1110,7 @@ namespace Microsoft.UI.Tests.Controls.DatePickerTests
 				VerifyDatesAreEqual(date, datePicker.SelectedDate.Value);
 
 				this.Log().Info("Setting Date back to the null sentinel value. SelectedDate should become null.");
-				datePicker.Date = new DateTimeOffset(DEFAULT_DATE_TICKS, TimeSpan.Zero);
+				datePicker.Date = new DateTimeOffset(ManagedUtcTicksAtNativeZero, TimeSpan.Zero).ToLocalTime();
 				datePicker.SelectedDate.Should().BeNull();
 			});
 		}

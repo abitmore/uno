@@ -1,7 +1,7 @@
 ﻿using Uno.Extensions;
 using Uno.Foundation.Logging;
 using Uno.UI.DataBinding;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Data;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -10,12 +10,13 @@ using Uno.Disposables;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Windows.Foundation;
+using Microsoft.UI.Xaml.Input;
 using Uno.UI.Xaml;
 
 using Uno.UI.Extensions;
 using Uno.UI.Xaml.Input;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class ScrollContentPresenter : ContentPresenter, IScrollContentPresenter
 	{
@@ -30,6 +31,7 @@ namespace Windows.UI.Xaml.Controls
 		private bool _eventsRegistered;
 
 		private (double? horizontal, double? vertical)? _pendingScrollTo;
+		private (double? horizontal, double? vertical) _lastScrollToRequest;
 		private FrameworkElement _rootEltUsedToProcessScrollTo;
 
 		internal Size ScrollBarSize
@@ -182,12 +184,26 @@ namespace Windows.UI.Xaml.Controls
 		{
 			base.OnLoaded();
 			RestoreScroll();
-			RegisterEventHandler("scroll", (EventHandler)OnScroll, GenericEventHandlers.RaiseEventHandler);
+			RegisterEventHandler("scroll", (RoutedEventHandlerWithHandled)OnScroll, GenericEventHandlers.RaiseRoutedEventHandlerWithHandled);
+
+			// a workaround to make scrolling cancelable on WASM
+			AddHandler(PointerWheelChangedEvent, new PointerEventHandler(OnPointerWheelChanged), true);
+		}
+
+		private void OnPointerWheelChanged(object _, PointerRoutedEventArgs args)
+		{
+			// On other Uno targets, handling PointerWheelChanged cancels the scrolling (which makes sense, but doesn't necessarily
+			// match WinUI). So, to make the behaviour uniform, we also prevent native scrolling here.
+			// Unlike KeyDown, we can't wait until OnScroll to prevent the scrolling. We have to cancel it right here.
+			if (args.Handled)
+			{
+				((IHtmlHandleableRoutedEventArgs)args).HandledResult |= HtmlEventDispatchResult.PreventDefault;
+			}
 		}
 
 		private void RestoreScroll()
 		{
-			if (TemplatedParent is ScrollViewer sv)
+			if (GetTemplatedParent() is ScrollViewer sv)
 			{
 				if (sv.HorizontalOffset > 0 || sv.VerticalOffset > 0)
 				{
@@ -202,7 +218,9 @@ namespace Windows.UI.Xaml.Controls
 		private protected override void OnUnloaded()
 		{
 			base.OnUnloaded();
-			UnregisterEventHandler("scroll", (EventHandler)OnScroll, GenericEventHandlers.RaiseEventHandler);
+			UnregisterEventHandler("scroll", new RoutedEventHandlerWithHandled(OnScroll), GenericEventHandlers.RaiseEventHandler);
+
+			RemoveHandler(PointerWheelChangedEvent, new PointerEventHandler(OnPointerWheelChanged));
 
 			if (_rootEltUsedToProcessScrollTo is { } rootElt)
 			{
@@ -211,11 +229,9 @@ namespace Windows.UI.Xaml.Controls
 			}
 		}
 
-		/// <inheritdoc />
-		internal override void OnLayoutUpdated()
+		internal override void AfterArrange()
 		{
-			base.OnLayoutUpdated();
-
+			base.AfterArrange();
 			TryProcessScrollTo();
 		}
 
@@ -246,6 +262,7 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			_pendingScrollTo = (horizontalOffset, verticalOffset);
+			_lastScrollToRequest = (horizontalOffset, verticalOffset);
 
 			WindowManagerInterop.ScrollTo(HtmlId, horizontalOffset, verticalOffset, disableAnimation);
 
@@ -263,10 +280,11 @@ namespace Windows.UI.Xaml.Controls
 
 				// The scroll to was not processed by the native SCP, we need to re-request ScrollTo a bit later.
 				// This happen has soon as the native SCP element is not in a valid state (like un-arranged or hidden).
-
-				if (_rootEltUsedToProcessScrollTo is null && Window.Current.RootElement is FrameworkElement rootFwElt)
+				var rootElement = XamlRoot?.VisualTree.RootElement ?? Window.CurrentSafe?.RootElement;
+				if (_rootEltUsedToProcessScrollTo is null && rootElement is FrameworkElement rootFwElt)
 				{
 					_rootEltUsedToProcessScrollTo = rootFwElt;
+					// TODO: LayoutUpdated doesn't look like the right thing to do.
 					rootFwElt.LayoutUpdated += TryProcessScrollTo;
 				}
 
@@ -290,7 +308,7 @@ namespace Windows.UI.Xaml.Controls
 						// If those values are invalid, the browser will raise the final event anyway.
 						// Note: If the caller has allowed animation, we assume that it's not interested by a sync response,
 						//		 we prefer to wait for the browser to effectively scroll.
-						(TemplatedParent as ScrollViewer)?.OnPresenterScrolled(
+						(GetTemplatedParent() as ScrollViewer)?.OnPresenterScrolled(
 							horizontalOffset ?? nativeHorizontalOffset,
 							verticalOffset ?? nativeVerticalOffset,
 							isIntermediate: false
@@ -302,8 +320,7 @@ namespace Windows.UI.Xaml.Controls
 			return success; // If if not yet processed, we assume that it will be.
 		}
 
-		// Backward compat, use the shared "Set" method instead.
-		public void ScrollTo(double? horizontalOffset, double? verticalOffset, bool disableAnimation)
+		void IScrollContentPresenter.ScrollTo(double? horizontalOffset, double? verticalOffset, bool disableAnimation)
 			=> Set(
 				horizontalOffset: horizontalOffset,
 				verticalOffset: verticalOffset,
@@ -320,21 +337,29 @@ namespace Windows.UI.Xaml.Controls
 			}
 		}
 
-		private void OnScroll(object sender, EventArgs args)
+		private bool OnScroll(object sender, RoutedEventArgs routedEventArgs)
 		{
+			if (Scroller?.CancelNextNativeScroll ?? false)
+			{
+				return true;
+			}
 			// We don't have any information from the DOM 'scroll' event about the intermediate vs. final state.
 			// We could try to rely on the IsPointerPressed state to detect when the user is scrolling and use it.
 			// This would however not include scrolling due to the inertia which should also be flagged as intermediate.
 			// The main issue is that the IsPointerPressed be true ONLY when dragging the scrollbars with the mouse, 
 			// as for finger and pen we will get a PointerCancelled which will reset the pressed state to false.
-			// And it would also requires us to explicitly invoke OnScroll in PointerRelease in order to raise the
-			// final SV.ViewChanged event with a IsIntermediate == false.
-			// This is probably safer for now to always consider the scroll as final, even if it introduce a performance cost
-			// (the SV updates mode is always sync when isIntermediate is false).
-			var isIntermediate = false;
-
+			// And it would also require us to explicitly invoke OnScroll in PointerRelease in order to raise the
+			// final SV.ViewChanged event with an IsIntermediate == false.
+			// As a best-effort guess, we will consider the scroll as intermediate if the native offset is different from the last ScrollTo request.
 			var horizontalOffset = GetNativeHorizontalOffset();
 			var verticalOffset = GetNativeVerticalOffset();
+			var isIntermediate =
+				(_lastScrollToRequest.horizontal.HasValue && Math.Abs(_lastScrollToRequest.horizontal.Value - horizontalOffset) >= 1) ||
+				(_lastScrollToRequest.vertical.HasValue && Math.Abs(_lastScrollToRequest.vertical.Value - verticalOffset) >= 1);
+			if (!isIntermediate)
+			{
+				_lastScrollToRequest = (null, null);
+			}
 
 			if (IsArrangeDirty
 				&& _pendingScrollTo is { } pending
@@ -346,7 +371,7 @@ namespace Windows.UI.Xaml.Controls
 				// When the native element of the SCP is becoming "valid" with a non 0 offset, it will raise a scroll event.
 				// But if we have a manual scroll request pending, we need to mute it and wait for the next layout updated.
 
-				return;
+				return false;
 			}
 
 			_pendingScrollTo = default;
@@ -358,6 +383,8 @@ namespace Windows.UI.Xaml.Controls
 
 			ScrollOffsets = new Point(horizontalOffset, verticalOffset);
 			InvalidateViewport();
+
+			return false;
 		}
 
 		private double GetNativeHorizontalOffset()

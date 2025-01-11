@@ -250,6 +250,7 @@ namespace Uno.Xaml
 	{
 		// Uno specific
 		private readonly IsIncluded _isIncluded;
+		private static readonly char[] _spaceArray = new[] { ' ' };
 
 		public XamlXmlParser (XmlReader xmlReader, XamlSchemaContext schemaContext, XamlXmlReaderSettings settings, IsIncluded isIncluded)
 		{
@@ -966,7 +967,7 @@ namespace Uno.Xaml
 			var ignorable = members.FirstOrDefault(a => a.Key == XamlLanguage.Ignorable);
 			if (ignorable.Key != null)
 			{
-				ignorables.Push(ignorable.Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+				ignorables.Push(ignorable.Value.Split(_spaceArray, StringSplitOptions.RemoveEmptyEntries));
 				return new Disposable(() => ignorables.Pop());
 			}
 
@@ -1039,12 +1040,12 @@ namespace Uno.Xaml
 			}
 		}
 
-#if NET7_0_OR_GREATER && !DISABLE_GENERATED_REGEX
+#if NET7_0_OR_GREATER
 		[System.Text.RegularExpressions.GeneratedRegex("\\s+")]
 #endif
 		private static partial System.Text.RegularExpressions.Regex SpaceMatch();
 
-#if !NET7_0_OR_GREATER || DISABLE_GENERATED_REGEX
+#if !NET7_0_OR_GREATER
 		private static partial System.Text.RegularExpressions.Regex SpaceMatch()
 			=> new System.Text.RegularExpressions.Regex("\\s+");
 #endif

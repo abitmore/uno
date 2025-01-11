@@ -1,23 +1,24 @@
 ﻿#if UNO_HAS_MANAGED_SCROLL_PRESENTER
-using Uno.Extensions;
-using Uno.UI.DataBinding;
-using Windows.UI.Xaml.Data;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Text;
-using Windows.Foundation;
-using System.IO;
+using System.Diagnostics;
+using Microsoft.UI.Xaml.Input;
 using Windows.Devices.Input;
-using Windows.System;
-using Windows.UI.Composition;
-using Windows.UI.Xaml.Input;
-using Uno.UI.Media;
+using Windows.Foundation;
+using Uno.UI.Xaml;
+using Uno.Disposables;
 
-namespace Windows.UI.Xaml.Controls
+
+#if HAS_UNO_WINUI
+using _PointerDeviceType = global::Microsoft.UI.Input.PointerDeviceType;
+#else
+using _PointerDeviceType = global::Windows.Devices.Input.PointerDeviceType;
+#endif
+
+namespace Microsoft.UI.Xaml.Controls
 {
-	public partial class ScrollContentPresenter : ContentPresenter, ICustomClippingElement
+	public partial class ScrollContentPresenter : ContentPresenter
+#if !__CROSSRUNTIME__ && !IS_UNIT_TESTS
+		, ICustomClippingElement
+#endif
 	{
 		private /*readonly - partial*/ IScrollStrategy _strategy;
 
@@ -57,6 +58,8 @@ namespace Windows.UI.Xaml.Controls
 
 		private object RealContent => Content;
 
+		private readonly SerialDisposable _eventSubscriptions = new();
+
 		partial void InitializePartial()
 		{
 #if __SKIA__
@@ -67,14 +70,62 @@ namespace Windows.UI.Xaml.Controls
 
 			_strategy.Initialize(this);
 
+			ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY; // Updated in PrepareTouchScroll!
+		}
+
+		private void HookScrollEvents(ScrollViewer sv)
+		{
+			UnhookScrollEvents(sv);
+
+			// Note: the way WinUI does scrolling is very different, and doesn't use
+			// PointerWheelChanged changes, etc.
+			// We can either subscribe on the ScrollViewer or the SCP directly, but due to
+			// the way hit-testing works (see #16201), the SCP will not receive any pointer
+			// events. On WinUI, this is also the case: pointer presses are received on the SV,
+			// not on the SCP.
+
 			// Mouse wheel support
-			PointerWheelChanged += PointerWheelScroll;
+			sv.PointerWheelChanged += PointerWheelScroll;
 
 			// Touch scroll support
-			ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY; // Updated in PrepareTouchScroll!
+			// Note: Events are hooked on the SCP itself, not the ScrollViewer
 			ManipulationStarting += PrepareTouchScroll;
+			ManipulationStarted += TouchScrollStarted;
 			ManipulationDelta += UpdateTouchScroll;
 			ManipulationCompleted += CompleteTouchScroll;
+
+			_eventSubscriptions.Disposable = Disposable.Create(() =>
+			{
+				sv.PointerWheelChanged -= PointerWheelScroll;
+
+				ManipulationStarting -= PrepareTouchScroll;
+				ManipulationStarted -= TouchScrollStarted;
+				ManipulationDelta -= UpdateTouchScroll;
+				ManipulationCompleted -= CompleteTouchScroll;
+			});
+		}
+
+		private void UnhookScrollEvents(ScrollViewer sv)
+		{
+			_eventSubscriptions.Disposable = null;
+		}
+
+		private protected override void OnLoaded()
+		{
+			base.OnLoaded();
+			if (Scroller is { } sv)
+			{
+				HookScrollEvents(sv);
+			}
+		}
+
+		private protected override void OnUnloaded()
+		{
+			base.OnUnloaded();
+			if (Scroller is { } sv)
+			{
+				UnhookScrollEvents(sv);
+			}
 		}
 
 		/// <inheritdoc />
@@ -108,9 +159,9 @@ namespace Windows.UI.Xaml.Controls
 
 			if (horizontalOffset is double hOffset)
 			{
-				var extentWidth = ExtentWidth;
-				var viewportWidth = ViewportWidth;
-				var scrollX = ValidateInputOffset(hOffset, 0, extentWidth - viewportWidth);
+				var maxOffset = Scroller?.ScrollableWidth ?? ExtentWidth - ViewportWidth;
+
+				var scrollX = ValidateInputOffset(hOffset, 0, maxOffset);
 
 				success &= scrollX == hOffset;
 
@@ -122,9 +173,8 @@ namespace Windows.UI.Xaml.Controls
 
 			if (verticalOffset is double vOffset)
 			{
-				var extentHeight = ExtentHeight;
-				var viewportHeight = ViewportHeight;
-				var scrollY = ValidateInputOffset(vOffset, 0, extentHeight - viewportHeight);
+				var maxOffset = Scroller?.ScrollableHeight ?? ExtentHeight - ViewportHeight;
+				var scrollY = ValidateInputOffset(vOffset, 0, maxOffset);
 
 				success &= scrollY == vOffset;
 
@@ -179,6 +229,21 @@ namespace Windows.UI.Xaml.Controls
 			}
 		}
 
+		private void TouchScrollStarted(object sender, ManipulationStartedRoutedEventArgs e)
+		{
+			if (e.Container != this)
+			{
+				// This gesture is coming from a nested element, we just ignore it!
+				return;
+			}
+
+			if (e.PointerDeviceType == _PointerDeviceType.Touch)
+			{
+				Debug.Assert(PointerRoutedEventArgs.LastPointerEvent.Pointer.UniqueId == e.Pointers[0]);
+				this.CapturePointer(PointerRoutedEventArgs.LastPointerEvent.Pointer);
+			}
+		}
+
 		private void UpdateTouchScroll(object sender, ManipulationDeltaRoutedEventArgs e)
 		{
 			if (e.Container != this) // No needs to check the pointer type, if the manip is local it's touch, otherwise it was cancelled in starting.
@@ -202,10 +267,15 @@ namespace Windows.UI.Xaml.Controls
 			}
 
 			Set(disableAnimation: true, isIntermediate: false);
+
+			Debug.Assert(PointerRoutedEventArgs.LastPointerEvent.Pointer.UniqueId == e.Pointers[0]);
+			this.ReleasePointerCapture(PointerRoutedEventArgs.LastPointerEvent.Pointer);
 		}
 
+#if !__CROSSRUNTIME__ && !IS_UNIT_TESTS
 		bool ICustomClippingElement.AllowClippingToLayoutSlot => true;
 		bool ICustomClippingElement.ForceClippingToLayoutSlot => true; // force scrollviewer to always clip
+#endif
 	}
 }
 #endif

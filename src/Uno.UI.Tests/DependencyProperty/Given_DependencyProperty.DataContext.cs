@@ -3,7 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Uno.Extensions;
 using Uno.UI.DataBinding;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Data;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,9 +14,9 @@ using System.Runtime.CompilerServices;
 using Uno.Disposables;
 using System.ComponentModel;
 using Uno.UI;
-using Windows.UI.Xaml;
+using Microsoft.UI.Xaml;
 using System.Threading;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using System.Collections;
 
 namespace Uno.UI.Tests.BinderTests_DataContext
@@ -178,10 +178,8 @@ namespace Uno.UI.Tests.BinderTests_DataContext
 			SUT.MyList = new List<MyObject>() { sub1 };
 
 			SUT.DataContext = 42;
-			SUT.TemplatedParent = templatedParent;
 
 			Assert.AreEqual(42, sub1.DataContext);
-			Assert.AreEqual(templatedParent, sub1.TemplatedParent);
 		}
 
 		[TestMethod]
@@ -194,10 +192,8 @@ namespace Uno.UI.Tests.BinderTests_DataContext
 			SUT.MyList = new NonEnumerableList<MyObject>() { sub1 };
 
 			SUT.DataContext = 42;
-			SUT.TemplatedParent = templatedParent;
 
 			Assert.AreEqual(42, sub1.DataContext);
-			Assert.AreEqual(templatedParent, sub1.TemplatedParent);
 		}
 
 		[TestMethod]

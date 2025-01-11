@@ -8,11 +8,11 @@ using Windows.Foundation;
 using Windows.UI;
 using Windows.UI.Input.Preview.Injection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MUXControlsTestApp.Utilities;
 using Private.Infrastructure;
-using Uno.UI.RuntimeTests.ListViewPages;
-#if NETFX_CORE
 using Uno.UI.Extensions;
-#elif __IOS__
+using Uno.UI.RuntimeTests.ListViewPages;
+#if __IOS__
 using UIKit;
 #elif __MACOS__
 using AppKit;
@@ -20,14 +20,11 @@ using AppKit;
 using Uno.UI;
 #endif
 
-#if HAS_UNO_WINUI
+#if HAS_UNO_WINUI || WINAPPSDK
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using NavigationView = Windows.UI.Xaml.Controls.NavigationView;
-using NavigationViewItem = Windows.UI.Xaml.Controls.NavigationViewItem;
-using NavigationViewList = Windows.UI.Xaml.Controls.NavigationViewList;
 #else
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Data;
@@ -41,6 +38,7 @@ using Uno.UI.RuntimeTests.Extensions;
 using Uno.UI.RuntimeTests.Helpers;
 using Uno.UI.RuntimeTests.Tests.Uno_UI_Xaml_Core;
 using Uno.UI.Toolkit.Extensions;
+using Microsoft.UI.Xaml.Media;
 
 namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 {
@@ -48,8 +46,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 	[RunsOnUIThread]
 	public partial class Given_NavigationView
 	{
+#if HAS_UNO && !HAS_UNO_WINUI
 		[TestMethod]
-		[RunsOnUIThread]
 #if __MACOS__
 		[Ignore("Currently fails on macOS, part of #9282 epic")]
 #endif
@@ -82,9 +80,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 #endif
 			Assert.AreEqual(item2, children.Last());
 		}
+#endif
 
 		[TestMethod]
-		[RunsOnUIThread]
 		[RequiresFullWindow]
 		[Ignore("Failing on CI due to animations")]
 #if false && __MACOS__
@@ -160,7 +158,46 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			}
 		}
 
+#if HAS_UNO_WINUI || WINAPPSDK
+		[TestMethod]
+		public async Task When_NavigationViewItem_MenuSource_VectorChanged()
+		{
+			var nvi1 = new NavigationViewItem
+			{
+				Content = "Level 1",
+				Icon = new SymbolIcon(Symbol.Home)
+			};
+			var source = new ObservableCollection<NavigationViewItem>
+			{
+				nvi1
+			};
+
+			var nv = new NavigationView
+			{
+				PaneDisplayMode = NavigationViewPaneDisplayMode.Left,
+				MenuItemsSource = source
+			};
+
+			await UITestHelper.Load(nv);
+
+			var nvi2 = new NavigationViewItem { Content = "Level 1 item 1", Name = "RuntimeTestNVI" };
+			source[0].MenuItems.Add(nvi2);
+			await WindowHelper.WaitForIdle();
+
+			nvi1.IsExpanded = true;
+			await WindowHelper.WaitForIdle();
+
+#if __ANDROID__ || __IOS__
+			var descendant = nv.EnumerateDescendants().SingleOrDefault(d => d is NavigationViewItem { Name: "RuntimeTestNVI" });
+			Assert.AreEqual(nvi2, descendant);
+#else
+			Assert.AreEqual(nvi2, nv.FindVisualChildByName("RuntimeTestNVI"));
+#endif
+		}
+#endif
 	}
+
+#if HAS_UNO && !HAS_UNO_WINUI
 	public partial class MyNavigationView : NavigationView
 	{
 		public NavigationViewList MenuItemsHost { get; private set; }
@@ -170,4 +207,5 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			MenuItemsHost = GetTemplateChild("MenuItemsHost") as NavigationViewList;
 		}
 	}
+#endif
 }

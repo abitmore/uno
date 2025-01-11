@@ -1,19 +1,24 @@
 ﻿using Uno.Extensions;
-using Windows.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Media.Animation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Windows.UI.Xaml.Markup;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Data;
 using Uno.Foundation.Logging;
 
-namespace Windows.UI.Xaml
+namespace Microsoft.UI.Xaml
 {
 	[ContentProperty(Name = "Storyboard")]
 	public partial class VisualTransition : DependencyObject
 	{
+		/// <summary>
+		/// Lazy builder provided by the source generator. Invoking this will
+		/// optionally fill <see cref="Storyboard"/>.
+		/// </summary>
 		internal Action LazyBuilder { get; set; }
+		internal bool? FromLegacyTemplate { get; set; }
 
 		public VisualTransition()
 		{
@@ -44,7 +49,15 @@ namespace Windows.UI.Xaml
 			{
 				var builder = LazyBuilder;
 				LazyBuilder = null;
-				builder.Invoke();
+				try
+				{
+					TemplatedParentScope.PushScope(this.GetTemplatedParent(), FromLegacyTemplate == true);
+					builder.Invoke();
+				}
+				finally
+				{
+					TemplatedParentScope.PopScope();
+				}
 
 				if (Storyboard is IDependencyObjectStoreProvider storyboardProvider)
 				{
@@ -81,12 +94,12 @@ namespace Windows.UI.Xaml
 		{
 			get
 			{
-				global::Windows.Foundation.Metadata.ApiInformation.TryRaiseNotImplemented("Windows.UI.Xaml.VisualTransition", "Duration VisualTransition.GeneratedDuration", LogLevel.Debug);
+				global::Windows.Foundation.Metadata.ApiInformation.TryRaiseNotImplemented("Microsoft.UI.Xaml.VisualTransition", "Duration VisualTransition.GeneratedDuration", LogLevel.Debug);
 				return _generatedDuration;
 			}
 			set
 			{
-				global::Windows.Foundation.Metadata.ApiInformation.TryRaiseNotImplemented("Windows.UI.Xaml.VisualTransition", "Duration VisualTransition.GeneratedDuration", LogLevel.Debug);
+				global::Windows.Foundation.Metadata.ApiInformation.TryRaiseNotImplemented("Microsoft.UI.Xaml.VisualTransition", "Duration VisualTransition.GeneratedDuration", LogLevel.Debug);
 				_generatedDuration = value;
 			}
 		}

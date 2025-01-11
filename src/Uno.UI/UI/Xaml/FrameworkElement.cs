@@ -1,29 +1,31 @@
 ﻿#pragma warning disable CS0105 // Ignore duplicate namespaces, to remove when moving to WinUI source tree.
 
 using Uno.Diagnostics.Eventing;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using Uno.UI;
 using System.Linq;
 using Windows.Foundation;
 using Uno.UI.Controls;
 using System.Threading.Tasks;
-using Windows.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Media.Animation;
 using Uno.Extensions;
 using Uno.Foundation.Logging;
-using Windows.UI.Xaml.Automation.Peers;
-using Windows.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft/* UWP don't rename */.UI.Xaml.Controls;
 using Uno;
 using Uno.Disposables;
 using Windows.UI.Core;
 using System.ComponentModel;
 using Uno.UI.DataBinding;
 using Uno.UI.Xaml;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Data;
+using Uno.UI.Xaml.Controls;
 using Uno.UI.Xaml.Core;
 using Uno.UI.Xaml.Media;
 
@@ -38,10 +40,10 @@ using View = AppKit.NSView;
 using Color = Windows.UI.Color;
 #else
 using Color = System.Drawing.Color;
-using View = Windows.UI.Xaml.UIElement;
+using View = Microsoft.UI.Xaml.UIElement;
 #endif
 
-namespace Windows.UI.Xaml
+namespace Microsoft.UI.Xaml
 {
 	public partial class FrameworkElement : UIElement, IFrameworkElement, IFrameworkElementInternal, ILayoutConstraints, IDependencyObjectParse
 #if !UNO_REFERENCE_API
@@ -63,7 +65,7 @@ namespace Windows.UI.Xaml
 		private FrameworkElementLayouter _layouter;
 
 		ILayouter ILayouterElement.Layouter => _layouter;
-		Size ILayouterElement.LastAvailableSize => LastAvailableSize;
+		Size ILayouterElement.LastAvailableSize => m_previousAvailableSize;
 		bool ILayouterElement.IsMeasureDirty => IsMeasureDirty;
 		bool ILayouterElement.IsFirstMeasureDoneAndManagedElement => IsFirstMeasureDone;
 		bool ILayouterElement.IsMeasureDirtyPathDisabled => IsMeasureDirtyPathDisabled;
@@ -141,19 +143,113 @@ namespace Windows.UI.Xaml
 		{
 			InternalBackgroundSizing = (BackgroundSizing)e.NewValue;
 			OnBackgroundSizingChangedPartial(e);
+#if __SKIA__
+			(this as IBorderInfoProvider)?.UpdateBackgroundSizing();
+#endif
 		}
 
 		partial void OnBackgroundSizingChangedPartial(DependencyPropertyChangedEventArgs dependencyPropertyChangedEventArgs);
 
 		#endregion
 
+		#region FlowDirection Dependency Property
+#if !SUPPORTS_RTL
+		[NotImplemented("__ANDROID__", "__IOS__", "__WASM__", "__MACOS__")]
+#endif
+		public FlowDirection FlowDirection
+		{
+			get => GetFlowDirectionValue();
+			set => SetFlowDirectionValue(value);
+		}
+
+#if !SUPPORTS_RTL
+		[NotImplemented("__ANDROID__", "__IOS__", "__WASM__", "__MACOS__")]
+#endif
+		[GeneratedDependencyProperty(DefaultValue = FlowDirection.LeftToRight, Options =
+#if SUPPORTS_RTL
+			FrameworkPropertyMetadataOptions.AffectsMeasure |
+#endif
+			FrameworkPropertyMetadataOptions.Inherits)]
+		public static DependencyProperty FlowDirectionProperty { get; } = CreateFlowDirectionProperty();
+
+		#endregion
+		internal void RaiseSizeChanged(SizeChangedEventArgs args)
+		{
+#if !__NETSTD_REFERENCE__ && !IS_UNIT_TESTS
+			SizeChanged?.Invoke(this, args);
+#if !UNO_HAS_ENHANCED_LIFECYCLE
+			_renderTransform?.UpdateSize(args.NewSize);
+#endif
+#endif
+		}
+
+#if UNO_HAS_ENHANCED_LIFECYCLE
+		internal void UpdateRenderTransformSize(Size newSize)
+			=> _renderTransform?.UpdateSize(newSize);
+#endif
+
+#if !IS_UNIT_TESTS
+		private protected override double GetActualHeight()
+		{
+			var height = Height;
+			if (double.IsNaN(height))
+			{
+				height = Math.Min(MinHeight, double.PositiveInfinity);
+			}
+
+			if (IsMeasureDirty && !HasLayoutStorage)
+			{
+				height = 0;
+			}
+			else if (HasLayoutStorage)
+			{
+				height = RenderSize.Height;
+			}
+			else
+			{
+				height = ComputeHeightInMinMaxRange(height);
+			}
+
+			return height;
+		}
+
+		private protected override double GetActualWidth()
+		{
+			var width = Width;
+			if (double.IsNaN(width))
+			{
+				width = Math.Min(MinWidth, double.PositiveInfinity);
+			}
+
+			if (IsMeasureDirty && !HasLayoutStorage)
+			{
+				width = 0;
+			}
+			else if (HasLayoutStorage)
+			{
+				width = RenderSize.Width;
+			}
+			else
+			{
+				width = ComputeWidthInMinMaxRange(width);
+			}
+
+			return width;
+		}
+
+		private double ComputeWidthInMinMaxRange(double width)
+			=> Math.Max(Math.Min(width, MaxWidth), MinWidth);
+
+		private double ComputeHeightInMinMaxRange(double height)
+			=> Math.Max(Math.Min(height, MaxHeight), MinHeight);
+#endif
 
 		partial void Initialize()
 		{
 #if !UNO_REFERENCE_API
 			_layouter = new FrameworkElementLayouter(this, MeasureOverride, ArrangeOverride);
 #endif
-			Resources = new Windows.UI.Xaml.ResourceDictionary();
+			Resources = new Microsoft.UI.Xaml.ResourceDictionary();
 
 			IFrameworkElementHelper.Initialize(this);
 		}
@@ -162,7 +258,7 @@ namespace Windows.UI.Xaml
 #if __ANDROID__
 		new
 #endif
-		Windows.UI.Xaml.ResourceDictionary Resources
+		Microsoft.UI.Xaml.ResourceDictionary Resources
 		{
 			get; set;
 		}
@@ -175,10 +271,12 @@ namespace Windows.UI.Xaml
 		new
 #endif
 		DependencyObject Parent =>
-#if UNO_HAS_MANAGED_POINTERS || __WASM__
 			LogicalParentOverride ??
-#endif
 			((IDependencyObjectStoreProvider)this).Store.Parent as DependencyObject;
+
+#if !__NETSTD_REFERENCE__
+		internal bool HasParent() => Parent != null;
+#endif
 
 		public global::System.Uri BaseUri
 		{
@@ -193,12 +291,10 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-#if UNO_HAS_MANAGED_POINTERS || __WASM__
 		/// <summary>
 		/// Allows to override the publicly-visible <see cref="Parent"/> without modifying DP propagation.
 		/// </summary>
 		internal DependencyObject LogicalParentOverride { get; set; }
-#endif
 
 		/// <summary>
 		/// Provides the managed visual parent of the element. This property can be overriden for specific
@@ -238,8 +334,14 @@ namespace Windows.UI.Xaml
 		/// <returns>The size that this object determines it needs during layout, based on its calculations of the allocated sizes for child objects or based on other considerations such as a fixed container size.</returns>
 		protected virtual Size MeasureOverride(Size availableSize)
 		{
+#if __ANDROID__ || __IOS__ || __MACOS__
 			var child = this.FindFirstChild();
-			return child != null ? MeasureElement(child, availableSize) : new Size(0, 0);
+			return child is not null && child is not UIElement
+				? MeasureElement(child, availableSize)
+				: new Size(0, 0);
+#else
+			return default;
+#endif
 		}
 
 		/// <summary>
@@ -249,21 +351,14 @@ namespace Windows.UI.Xaml
 		/// <returns>The actual size that is used after the element is arranged in layout.</returns>
 		protected virtual Size ArrangeOverride(Size finalSize)
 		{
+#if __ANDROID__ || __IOS__ || __MACOS__
 			var child = this.FindFirstChild();
-
-			if (child != null)
+			if (child is not null && child is not UIElement)
 			{
-#if UNO_REFERENCE_API
-				child.Arrange(new Rect(0, 0, finalSize.Width, finalSize.Height));
-#else
 				ArrangeElement(child, new Rect(0, 0, finalSize.Width, finalSize.Height));
+			}
 #endif
-				return finalSize;
-			}
-			else
-			{
-				return finalSize;
-			}
+			return finalSize;
 		}
 
 		/// <summary>
@@ -318,6 +413,10 @@ namespace Windows.UI.Xaml
 
 			// Apply active style and default style when we enter the visual tree, if they haven't been applied already.
 			ApplyStyles();
+
+			// This is replicating the UpdateAllThemeReferences call in Enter in WinUI.
+			// Updates theme references to account for new ancestor theme dictionaries.
+			this.UpdateResourceBindings();
 		}
 
 		partial void OnUnloadedPartial()
@@ -342,15 +441,11 @@ namespace Windows.UI.Xaml
 			{
 				throw new InvalidOperationException($"Called without matching {nameof(IsParsing)} call. This method should never be called from user code.");
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY
 			try
-#endif
 			{
 				ApplyStyles();
 			}
-#if !HAS_EXPENSIVE_TRYFINALLY
 			finally
-#endif
 			{
 				_isParsing = false;
 				ResourceResolver.PopSourceFromScope();
@@ -412,6 +507,8 @@ namespace Windows.UI.Xaml
 			}
 		}
 
+		internal Style GetActiveStyle() => _activeStyle;
+
 		private SpecializedResourceDictionary.ResourceKey ThisTypeResourceKey
 		{
 			get
@@ -425,7 +522,7 @@ namespace Windows.UI.Xaml
 			}
 		}
 
-		private Style ResolveImplicitStyle() => this.StoreGetImplicitStyle(ThisTypeResourceKey);
+		private protected Style ResolveImplicitStyle() => this.StoreGetImplicitStyle(ThisTypeResourceKey);
 
 		#region Requested theme dependency property
 
@@ -451,7 +548,7 @@ namespace Windows.UI.Xaml
 
 		private void OnRequestedThemeChanged(ElementTheme oldValue, ElementTheme newValue)
 		{
-			if (IsWindowRoot || XamlRoot?.Content == this) // Some elements like TextBox set RequestedTheme in their Focused style, so only listen to changes to root view
+			if (XamlRoot?.Content == this) // Some elements like TextBox set RequestedTheme in their Focused style, so only listen to changes to root view
 			{
 				// This is an ultra-naive implementation... but nonetheless enables the common use case of overriding the system theme for
 				// the entire visual tree (since Application.RequestedTheme cannot be set after launch)
@@ -511,11 +608,7 @@ namespace Windows.UI.Xaml
 
 		public Brush FocusVisualSecondaryBrush
 		{
-			get
-			{
-				EnsureFocusVisualBrushDefaults();
-				return GetFocusVisualSecondaryBrushValue();
-			}
+			get => GetFocusVisualSecondaryBrushValue();
 			set => SetFocusVisualSecondaryBrushValue(value);
 		}
 
@@ -532,11 +625,7 @@ namespace Windows.UI.Xaml
 
 		public Brush FocusVisualPrimaryBrush
 		{
-			get
-			{
-				EnsureFocusVisualBrushDefaults();
-				return GetFocusVisualPrimaryBrushValue();
-			}
+			get => GetFocusVisualPrimaryBrushValue();
 			set => SetFocusVisualPrimaryBrushValue(value);
 		}
 
@@ -553,21 +642,6 @@ namespace Windows.UI.Xaml
 
 		[GeneratedDependencyProperty]
 		public static DependencyProperty FocusVisualMarginProperty { get; } = CreateFocusVisualMarginProperty();
-
-		private bool _focusVisualBrushesInitialized;
-
-		internal void EnsureFocusVisualBrushDefaults()
-		{
-			if (_focusVisualBrushesInitialized)
-			{
-				return;
-			}
-
-			ResourceResolver.ApplyResource(this, FocusVisualPrimaryBrushProperty, new SpecializedResourceDictionary.ResourceKey("SystemControlFocusVisualPrimaryBrush"), ResourceUpdateReason.ThemeResource, null, DependencyPropertyValuePrecedences.DefaultValue);
-			ResourceResolver.ApplyResource(this, FocusVisualSecondaryBrushProperty, new SpecializedResourceDictionary.ResourceKey("SystemControlFocusVisualSecondaryBrush"), ResourceUpdateReason.ThemeResource, null, DependencyPropertyValuePrecedences.DefaultValue);
-
-			_focusVisualBrushesInitialized = true;
-		}
 
 		/// <summary>
 		/// Gets or sets whether a disabled control can receive focus.
@@ -599,7 +673,7 @@ namespace Windows.UI.Xaml
 		[GeneratedDependencyProperty(DefaultValue = true, Options = FrameworkPropertyMetadataOptions.Inherits)]
 		public static DependencyProperty AllowFocusOnInteractionProperty { get; } = CreateAllowFocusOnInteractionProperty();
 
-		internal
+		internal virtual
 #if __ANDROID__
 			new
 #endif
@@ -717,14 +791,74 @@ namespace Windows.UI.Xaml
 
 		protected virtual bool GoToElementStateCore(string stateName, bool useTransitions) => false;
 
-		public event EventHandler<object> LayoutUpdated;
+		#region LayoutUpdated
 
-		internal virtual void OnLayoutUpdated()
+		private event EventHandler<object> _layoutUpdated;
+
+		public event EventHandler<object> LayoutUpdated
 		{
-			LayoutUpdated?.Invoke(this, new RoutedEventArgs(this));
+			add
+			{
+#if UNO_HAS_ENHANCED_LIFECYCLE
+				var isFirstSubscriber = _layoutUpdated is null;
+#endif
+
+				_layoutUpdated += value;
+
+#if UNO_HAS_ENHANCED_LIFECYCLE
+				if (isFirstSubscriber)
+				{
+					Uno.UI.Extensions.DependencyObjectExtensions.GetContext(this).EventManager.AddLayoutUpdatedEventHandler(this);
+				}
+#endif
+			}
+			remove
+			{
+#if UNO_HAS_ENHANCED_LIFECYCLE
+				var hadSubscribers = _layoutUpdated is not null;
+#endif
+
+				_layoutUpdated -= value;
+
+#if UNO_HAS_ENHANCED_LIFECYCLE
+				if (hadSubscribers && _layoutUpdated is null)
+				{
+					Uno.UI.Extensions.DependencyObjectExtensions.GetContext(this).EventManager.RemoveLayoutUpdatedEventHandler(this);
+				}
+#endif
+			}
 		}
 
+		// This shouldn't be virtual on enhanced lifecycle as it won't be called if there is no real subscriber to LayoutUpdated.
+		internal
+#if !UNO_HAS_ENHANCED_LIFECYCLE
+			virtual
+#endif
+			void OnLayoutUpdated()
+		{
+			_layoutUpdated?.Invoke(null, null);
+		}
+
+		#endregion
+
 		private protected virtual Thickness GetBorderThickness() => Thickness.Empty;
+
+		private protected Size MeasureFirstChild(Size availableSize)
+		{
+			var child = this.FindFirstChild();
+			return child != null ? MeasureElement(child, availableSize) : new Size(0, 0);
+		}
+
+		private protected Size ArrangeFirstChild(Size finalSize)
+		{
+			var child = this.FindFirstChild();
+			if (child != null)
+			{
+				ArrangeElement(child, new Rect(0, 0, finalSize.Width, finalSize.Height));
+			}
+
+			return finalSize;
+		}
 
 #if XAMARIN
 		private static FrameworkElement FindPhaseEnabledRoot(ContentControl content)
@@ -825,9 +959,6 @@ namespace Windows.UI.Xaml
 			Resources?.UpdateThemeBindings(updateReason);
 			(this as IDependencyObjectStoreProvider).Store.UpdateResourceBindings(updateReason);
 
-			// After theme change, the focus visual brushes may not reflect the correct settings
-			_focusVisualBrushesInitialized = false;
-
 			if (updateReason == ResourceUpdateReason.ThemeResource)
 			{
 				// Trigger ActualThemeChanged if relevant
@@ -921,5 +1052,49 @@ namespace Windows.UI.Xaml
 			protected override Size MeasureOverride(Size availableSize) => _measureOverrideHandler(availableSize);
 		}
 #endif
+
+		private protected virtual FrameworkTemplate/*?*/ GetTemplate()
+		{
+			return null;
+		}
+
+		// WinUI overrides this in CalendarViewBaseItemChrome, ListViewBaseItemChrome, and MediaPlayerElement.
+		private protected virtual bool HasTemplateChild()
+		{
+			return GetFirstChild() is not null;
+		}
+
+		internal UIElement GetFirstChildNoAddRef() => GetFirstChild();
+
+		internal virtual UIElement/*?*/ GetFirstChild()
+		{
+#if __CROSSRUNTIME__ && !__NETSTD_REFERENCE__
+			if (GetChildren() is { Count: > 0 } children)
+			{
+				return children[0] as UIElement;
+			}
+#elif XAMARIN
+			if (this is IShadowChildrenProvider { ChildrenShadow: { Count: > 0 } childrenShadow })
+			{
+				return childrenShadow[0] as UIElement;
+			}
+#endif
+
+			if (VisualTreeHelper.GetChildrenCount(this) > 0)
+			{
+				return VisualTreeHelper.GetChild(this, 0) as UIElement;
+			}
+
+			return null;
+		}
+
+		internal DependencyObject GetTemplatedParent()
+		{
+			return (this as IDependencyObjectStoreProvider)?.Store.GetTemplatedParent2();
+		}
+		internal void SetTemplatedParent(DependencyObject tp)
+		{
+			(this as IDependencyObjectStoreProvider)?.Store.SetTemplatedParent2(tp);
+		}
 	}
 }

@@ -4,8 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Uno.UI.Helpers;
 
 namespace Uno.UI.Tests.Windows_UI_XAML_Controls.SelectorTests
 {
@@ -221,7 +222,7 @@ namespace Uno.UI.Tests.Windows_UI_XAML_Controls.SelectorTests
 		{
 			var SUT = new Selector()
 			{
-				ItemsPanel = new ItemsPanelTemplate(() => new StackPanel()),
+				ItemsPanel = XamlHelper.LoadXaml<ItemsPanelTemplate>("<ItemsPanelTemplate><StackPanel /></ItemsPanelTemplate>"),
 				Template = new ControlTemplate(() => new ItemsPresenter()),
 			};
 			SUT.ForceLoaded();

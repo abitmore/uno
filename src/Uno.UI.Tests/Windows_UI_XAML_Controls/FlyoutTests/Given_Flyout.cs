@@ -8,8 +8,9 @@ using Uno.Extensions;
 using Uno.UI.Tests.Windows_UI_XAML_Controls.FlyoutTests.Controls;
 using Windows.Foundation;
 using Windows.UI.ViewManagement;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace Uno.UI.Tests.FlyoutTests
 {
@@ -32,7 +33,7 @@ namespace Uno.UI.Tests.FlyoutTests
 			var flyout = new Flyout()
 			{
 				LightDismissOverlayMode = LightDismissOverlayMode.On,
-				Placement = Windows.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom
+				Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom
 			};
 
 			var button = new Button()
@@ -49,9 +50,10 @@ namespace Uno.UI.Tests.FlyoutTests
 			SUT.Arrange(new Rect(0, 0, 20, 20));
 
 			//button.Click;
+			button.Focus(FocusState.Programmatic);
 			flyout.ShowAt(button);
 
-			Assert.AreEqual(button.LayoutSlot.X, flyout._popup.LayoutSlot.X);
+			Assert.AreEqual(LayoutInformation.GetLayoutSlot(button).X, LayoutInformation.GetLayoutSlot(flyout._popup).X);
 		}
 
 		[TestMethod]
@@ -153,11 +155,11 @@ namespace Uno.UI.Tests.FlyoutTests
 		[TestMethod]
 		public void When_Placement_Full()
 		{
-			var SUT = new Grid() { Name = "test" };
+			var app = UnitTestsApp.App.EnsureApplication();
 
 			var flyout = new Flyout()
 			{
-				Placement = Windows.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Full,
+				Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Full,
 				FlyoutPresenterStyle = new Style
 				{
 					Setters =
@@ -173,7 +175,10 @@ namespace Uno.UI.Tests.FlyoutTests
 				Flyout = flyout
 			};
 
+			button.ForceLoaded();
+
 			//button.Click;
+			button.Focus(FocusState.Programmatic);
 			flyout.ShowAt(button);
 
 			var presenter = flyout.GetPresenter();
@@ -194,11 +199,11 @@ namespace Uno.UI.Tests.FlyoutTests
 		[TestMethod]
 		public void When_Placement_Full_Max_Dims()
 		{
-			var SUT = new Grid() { Name = "test" };
+			var app = UnitTestsApp.App.EnsureApplication();
 
 			var flyout = new Flyout()
 			{
-				Placement = Windows.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Full,
+				Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Full,
 				FlyoutPresenterStyle = new Style
 				{
 					Setters =
@@ -214,7 +219,10 @@ namespace Uno.UI.Tests.FlyoutTests
 				Flyout = flyout
 			};
 
+			button.ForceLoaded();
+
 			//button.Click;
+			button.Focus(FocusState.Programmatic);
 			flyout.ShowAt(button);
 
 			var presenter = flyout.GetPresenter();
@@ -245,7 +253,7 @@ namespace Uno.UI.Tests.FlyoutTests
 
 			var flyout = new Windows_UI_XAML_Controls.FlyoutTests.Controls.SettingsFlyout()
 			{
-				Placement = Windows.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom
+				Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom
 			};
 
 			var button = new Button()

@@ -4,13 +4,17 @@ using System;
 using System.IO;
 using SkiaSharp;
 using Uno.UI.Xaml.Core;
-using Windows.UI.Xaml.Input;
-using WUX = Windows.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
+using WUX = Microsoft.UI.Xaml;
 using Uno.Foundation.Logging;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics.Display;
 using Gtk;
 using Uno.UI.Hosting;
+using Microsoft.UI.Composition;
+using Uno.UI.Runtime.Skia.Gtk.Hosting;
+using Microsoft.UI.Xaml;
+using Uno.UI.Helpers;
 
 namespace Uno.UI.Runtime.Skia.Gtk
 {
@@ -30,8 +34,7 @@ namespace Uno.UI.Runtime.Skia.Gtk
 		/// </summary>
 		private const int GuardBand = 1;
 
-		private readonly DisplayInformation _displayInformation;
-		private readonly IXamlRootHost _host;
+		private readonly IGtkXamlRootHost _host;
 
 		private float? _scale = 1;
 		private GRContext? _grContext;
@@ -45,20 +48,22 @@ namespace Uno.UI.Runtime.Skia.Gtk
 		/// In order to avoid virtual calls to <see cref="ClearOpenGL"/> and <see cref="FlushOpenGL"/> for performance reasons.
 		/// </remarks>
 		protected bool _isGLES;
+		private readonly XamlRoot _xamlRoot;
 
 		public SKColor BackgroundColor { get; set; }
 
-		public GLRenderSurfaceBase(IXamlRootHost host)
+		public GLRenderSurfaceBase(IGtkXamlRootHost host)
 		{
-			_displayInformation = DisplayInformation.GetForCurrentView();
-			_displayInformation.DpiChanged += OnDpiChanged;
+			_xamlRoot = GtkManager.XamlRootMap.GetRootForHost(host) ?? throw new InvalidOperationException("XamlRoot must not be null when renderer is initialized");
+			_xamlRoot.Changed += OnXamlRootChanged;
+			UpdateDpi();
 
 			// Set some event handlers
 			Render += UnoGLDrawingArea_Render;
 			Realized += GLRenderSurface_Realized;
 
 			HasDepthBuffer = false;
-			HasStencilBuffer = false;
+			HasStencilBuffer = true;
 
 			// AutoRender must be disabled to avoid having the GLArea re-render the
 			// composition Visuals after pointer interactions, causing undefined behaviors
@@ -88,10 +93,12 @@ namespace Uno.UI.Runtime.Skia.Gtk
 			}
 
 			var scale = _scale ?? 1f;
+			var scaleAdjustment = Math.Truncate(scale);
+
 			var scaledGuardBand = (int)(GuardBand * scale);
 
-			var w = (int)Math.Max(0, AllocatedWidth * scale + scaledGuardBand);
-			var h = (int)Math.Max(0, AllocatedHeight * scale + scaledGuardBand);
+			var w = (int)Math.Max(0, AllocatedWidth * scaleAdjustment + scaledGuardBand);
+			var h = (int)Math.Max(0, AllocatedHeight * scaleAdjustment + scaledGuardBand);
 
 			if (_renderTarget == null || _surface == null || _renderTarget.Width != w || _renderTarget.Height != h)
 			{
@@ -108,7 +115,7 @@ namespace Uno.UI.Runtime.Skia.Gtk
 
 				var glInfo = new GRGlFramebufferInfo((uint)framebuffer, colorType.ToGlSizedFormat());
 
-				_renderTarget = new GRBackendRenderTarget(w, h, samples, stencil, glInfo);
+				_renderTarget = new GRBackendRenderTarget(w, h, samples, 8, glInfo);
 
 				// create the surface
 				_surface?.Dispose();
@@ -136,7 +143,10 @@ namespace Uno.UI.Runtime.Skia.Gtk
 
 				if (_host.RootElement?.Visual is { } rootVisual)
 				{
-					WUX.Window.Current.Compositor.RenderRootVisual(_surface, rootVisual);
+					// OpenGL rendering on Gtk doesn't work well with transparency
+					// even though stencil buffer support is present and the color includes alpha
+					// SkiaRenderHelper.RenderRootVisual(w, h, rootVisual, _surface, canvas);
+					Compositor.GetSharedCompositor().RenderRootVisual(_surface, rootVisual, null);
 				}
 			}
 
@@ -174,9 +184,6 @@ namespace Uno.UI.Runtime.Skia.Gtk
 
 		protected abstract GRContext TryBuildGRContext();
 
-		private void OnDpiChanged(DisplayInformation sender, object args) =>
-			UpdateDpi();
-
 		public void TakeScreenshot(string filePath)
 		{
 			if (_surface != null)
@@ -189,6 +196,16 @@ namespace Uno.UI.Runtime.Skia.Gtk
 			}
 		}
 
-		private void UpdateDpi() => _scale = (float)_displayInformation.RawPixelsPerViewPixel;
+		private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => UpdateDpi();
+
+		private void UpdateDpi()
+		{
+			var newScale = (float)_xamlRoot.RasterizationScale;
+			if (_scale != newScale)
+			{
+				_scale = newScale;
+				InvalidateRender();
+			}
+		}
 	}
 }

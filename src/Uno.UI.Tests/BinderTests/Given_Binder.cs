@@ -3,7 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Uno.Extensions;
 using Uno.UI.DataBinding;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Data;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,10 +14,10 @@ using System.Runtime.CompilerServices;
 using Uno.Disposables;
 using System.ComponentModel;
 using Uno.UI;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Media;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Extensions.Logging;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using System.Threading;
 using Uno.UI.Xaml;
 
@@ -110,22 +110,22 @@ namespace Uno.UI.Tests.BinderTests
 			// It breaks here, when a broken binding would replace a fully functional one.
 			SUT.DataContext = new SourceLevel0();
 			Assert.AreEqual(10, child.TargetValue);
-			Assert.AreEqual(2, converter.ConversionCount);
-			Assert.AreEqual(null, converter.LastValue);
+			Assert.AreEqual(1, converter.ConversionCount);
+			Assert.AreEqual(1000, converter.LastValue);
 
 			SUT.DataContext = new SourceLevel0() { Item = new SourceLevel1() { List = new SourceLevel2[] { new SourceLevel2() } } };
 			Assert.AreEqual(-1000, child.TargetValue);
-			Assert.AreEqual(3, converter.ConversionCount);
+			Assert.AreEqual(2, converter.ConversionCount);
 			Assert.AreEqual(1000, converter.LastValue);
 
 			SUT.DataContext = null;
 			Assert.AreEqual(10, child.TargetValue);
-			Assert.AreEqual(4, converter.ConversionCount);
-			Assert.AreEqual(null, converter.LastValue);
+			Assert.AreEqual(2, converter.ConversionCount);
+			Assert.AreEqual(1000, converter.LastValue);
 
 			SUT.DataContext = new SourceLevel0() { Item = new SourceLevel1() { List = new SourceLevel2[] { new SourceLevel2() } } };
 			Assert.AreEqual(-1000, child.TargetValue);
-			Assert.AreEqual(5, converter.ConversionCount);
+			Assert.AreEqual(3, converter.ConversionCount);
 			Assert.AreEqual(1000, converter.LastValue);
 		}
 
@@ -170,22 +170,22 @@ namespace Uno.UI.Tests.BinderTests
 			// It breaks here, when a broken binding would replace a fully functional one.
 			SUT.DataContext = new SourceLevel0();
 			Assert.AreEqual(10, child.TargetValue);
-			Assert.AreEqual(2, converter.ConversionCount);
-			Assert.AreEqual(null, converter.LastValue);
+			Assert.AreEqual(1, converter.ConversionCount);
+			Assert.AreEqual(true, converter.LastValue);
 
 			SUT.DataContext = new SourceLevel0() { Item = new SourceLevel1() { List = new SourceLevel2[] { new SourceLevel2() } } };
 			Assert.AreEqual(-1000, child.TargetValue);
-			Assert.AreEqual(3, converter.ConversionCount);
+			Assert.AreEqual(2, converter.ConversionCount);
 			Assert.AreEqual(true, converter.LastValue);
 
 			SUT.DataContext = null;
 			Assert.AreEqual(10, child.TargetValue);
-			Assert.AreEqual(4, converter.ConversionCount);
-			Assert.AreEqual(null, converter.LastValue);
+			Assert.AreEqual(2, converter.ConversionCount);
+			Assert.AreEqual(true, converter.LastValue);
 
 			SUT.DataContext = new SourceLevel0() { Item = new SourceLevel1() { List = new SourceLevel2[] { new SourceLevel2() } } };
 			Assert.AreEqual(-1000, child.TargetValue);
-			Assert.AreEqual(5, converter.ConversionCount);
+			Assert.AreEqual(3, converter.ConversionCount);
 			Assert.AreEqual(true, converter.LastValue);
 		}
 
@@ -596,10 +596,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_PrivateProperty_And_XBind()
 		{
 			var source = new PrivateProperty(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyProperty",
@@ -616,10 +616,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_PrivateProperty_And_Binding()
 		{
 			var source = new PrivateProperty(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyProperty"
@@ -635,10 +635,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Public_Field_And_xBind()
 		{
 			var source = new PublicField(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyField",
@@ -655,10 +655,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Private_Field_And_xBind()
 		{
 			var source = new PrivateField(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyField",
@@ -675,7 +675,7 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Private_Field_And_xBind_Not_OneTime()
 		{
 			var source = new PrivateField(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			var binding = new Binding()
 			{
@@ -690,7 +690,7 @@ namespace Uno.UI.Tests.BinderTests
 					new[] { "MyField" });
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				binding
 			);
 
@@ -703,10 +703,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Public_Field_And_Binding()
 		{
 			var source = new PublicField(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyField"
@@ -722,10 +722,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Private_Field_And_Binding()
 		{
 			var source = new PrivateField(42);
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyField"
@@ -773,11 +773,11 @@ namespace Uno.UI.Tests.BinderTests
 		[TestMethod]
 		public void When_Source_Complex()
 		{
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 			var subject = new ElementNameSubject();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyProperty",
@@ -792,10 +792,10 @@ namespace Uno.UI.Tests.BinderTests
 		public void When_Source_String()
 		{
 			var source = "Test";
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Source = source
@@ -808,11 +808,11 @@ namespace Uno.UI.Tests.BinderTests
 		[TestMethod]
 		public void When_Subject_Source_Complex()
 		{
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 			var subject = new ElementNameSubject();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Path = "MyProperty",
@@ -830,11 +830,11 @@ namespace Uno.UI.Tests.BinderTests
 		[TestMethod]
 		public void When_Subject_Source()
 		{
-			var SUT = new Windows.UI.Xaml.Controls.Grid();
+			var SUT = new Microsoft.UI.Xaml.Controls.Grid();
 			var subject = new ElementNameSubject();
 
 			SUT.SetBinding(
-				Windows.UI.Xaml.Controls.Grid.TagProperty,
+				Microsoft.UI.Xaml.Controls.Grid.TagProperty,
 				new Binding()
 				{
 					Source = subject

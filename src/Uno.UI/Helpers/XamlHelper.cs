@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Windows.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Markup;
 
 namespace Uno.UI.Helpers;
 
@@ -13,29 +13,21 @@ internal static partial class XamlHelper
 	/// <remarks>
 	/// It will match an opening or closing or self-closing tag.
 	/// </remarks>
-#if DISABLE_GENERATED_REGEX
-	private static Regex EndOfTagRegex() => new Regex(@"(?=( ?/)?>)");
-#else
 	[GeneratedRegex(@"(?=( ?/)?>)")]
 	private static partial Regex EndOfTagRegex();
-#endif
 
 	/// <summary>
 	/// Matches any tag without xmlns prefix.
 	/// </summary>
-#if DISABLE_GENERATED_REGEX
-	private static Regex NonXmlnsTagRegex() => new Regex(@"<\w+[ />]");
-#else
 	[GeneratedRegex(@"<\w+[ />]")]
 	private static partial Regex NonXmlnsTagRegex();
-#endif
 
 	private static readonly IReadOnlyDictionary<string, string> KnownXmlnses = new Dictionary<string, string>
 	{
 		[string.Empty] = "http://schemas.microsoft.com/winfx/2006/xaml/presentation",
 		["x"] = "http://schemas.microsoft.com/winfx/2006/xaml",
 		["toolkit"] = "using:Uno.UI.Toolkit", // uno utilities
-		["muxc"] = "using:Microsoft.UI.Xaml.Controls",
+		["muxc"] = "using:Microsoft" + /* UWP don't rename */ ".UI.Xaml.Controls",
 	};
 
 	/// <summary>
@@ -79,6 +71,7 @@ internal static partial class XamlHelper
 
 		xaml = EndOfTagRegex().Replace(xaml, injection.TrimEnd(), 1);
 
-		return XamlReader.Load(xaml) as T;
+		var result = XamlReader.Load(xaml);
+		return result as T;
 	}
 }

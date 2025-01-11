@@ -12,31 +12,51 @@ using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI.Input.Preview.Injection;
 using Windows.UI.Popups;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Markup;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Markup;
 using Private.Infrastructure;
-using Windows.UI.Xaml.Media.Imaging;
 using SamplesApp.UITests;
 
+#if !HAS_UNO
+using System.Runtime.InteropServices;
+#endif
 namespace Uno.UI.RuntimeTests.Helpers;
 
 // Note: This file contains a bunch of helpers that are expected to be moved to the test engine among the pointer injection work
 
 public static class UITestHelper
 {
-	public static async Task<Windows.Foundation.Rect> Load(FrameworkElement element)
+	/// <summary>
+	/// Loads an element onto the test area, and wait for it to be loaded before returning.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="element">The element to be loaded onto the test area.</param>
+	/// <param name="isLoaded">optional, function to override the default is-loaded check.</param>
+	/// <returns>Loaded element absolute bounds.</returns>
+	/// <remarks>The default is-loaded check fails on 0 height/width, or empty list-view, overload the <paramref name="isLoaded"/> with <code>x => x.IsLoaded</code> or <code>x => x.GetTemplateRoot() != null</code> to bypass that.</remarks>
+	public static async Task<Rect> Load<T>(T element, Func<T, bool>? isLoaded = null) where T : FrameworkElement
 	{
 		TestServices.WindowHelper.WindowContent = element;
-		await TestServices.WindowHelper.WaitForLoaded(element);
-		element.UpdateLayout();
+
+		if (isLoaded is null)
+		{
+			await TestServices.WindowHelper.WaitForLoaded(element);
+		}
+		else
+		{
+			await TestServices.WindowHelper.WaitFor(() => isLoaded(element), message: $"Timeout waiting on {element} to be loaded with custom criteria.");
+		}
 		await TestServices.WindowHelper.WaitForIdle();
 
 		return element.GetAbsoluteBounds();
 	}
+
+	public static Task WaitForIdle() => TestServices.WindowHelper.WaitForIdle();
 
 	/// <summary>
 	/// Takes a screen-shot of the given element.
@@ -47,6 +67,7 @@ public static class UITestHelper
 	/// <returns></returns>
 	public static async Task<RawBitmap> ScreenShot(FrameworkElement element, bool opaque = false, ScreenShotScalingMode scaling = ScreenShotScalingMode.UsePhysicalPixelsWithImplicitScaling)
 	{
+#if HAS_RENDER_TARGET_BITMAP
 		var renderer = new RenderTargetBitmap();
 		element.UpdateLayout();
 		await TestServices.WindowHelper.WaitForIdle();
@@ -56,7 +77,7 @@ public static class UITestHelper
 		{
 			case ScreenShotScalingMode.UsePhysicalPixelsWithImplicitScaling:
 				await renderer.RenderAsync(element);
-				bitmap = await RawBitmap.From(renderer, element, DisplayInformation.GetForCurrentView()?.RawPixelsPerViewPixel ?? 1);
+				bitmap = await RawBitmap.From(renderer, element, element.XamlRoot?.RasterizationScale ?? 1);
 				break;
 			case ScreenShotScalingMode.UseLogicalPixels:
 				await renderer.RenderAsync(element, (int)element.RenderSize.Width, (int)element.RenderSize.Height);
@@ -76,6 +97,9 @@ public static class UITestHelper
 		}
 
 		return bitmap;
+#else
+		throw new NotSupportedException("Cannot take screenshot on this platform.");
+#endif
 	}
 
 	public enum ScreenShotScalingMode
@@ -111,6 +135,7 @@ public static class UITestHelper
 		TextBlock pos;
 		var popup = new ContentDialog
 		{
+			XamlRoot = TestServices.WindowHelper.XamlRoot,
 			MinWidth = bitmap.Width + 2,
 			MinHeight = bitmap.Height + 30,
 			Content = new Grid
@@ -124,9 +149,9 @@ public static class UITestHelper
 				{
 					new Border
 					{
-						BorderBrush = new SolidColorBrush(Windows.UI.Colors.Black),
+						BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Black),
 						BorderThickness = new Thickness(1),
-						Background = new SolidColorBrush(Windows.UI.Colors.Gray),
+						Background = new SolidColorBrush(Microsoft.UI.Colors.Gray),
 						Width = bitmap.Width * bitmap.ImplicitScaling + 2,
 						Height = bitmap.Height * bitmap.ImplicitScaling + 2,
 						Child = img = new Image
@@ -212,6 +237,18 @@ public static class UITestHelper
 
 		await popup.ShowAsync(ContentDialogPlacement.Popup);
 	}
+
+	public static void CloseAllPopups()
+#if HAS_UNO
+		=> VisualTreeHelper.CloseAllPopups(TestServices.WindowHelper.XamlRoot);
+#else
+	{
+		foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(TestServices.WindowHelper.XamlRoot))
+		{
+			popup.IsOpen = false;
+		}
+	}
+#endif
 }
 
 public class DynamicDataTemplate : IDisposable
@@ -289,7 +326,7 @@ public static class InputInjectorExtensions
 	public static Finger GetFinger(this InputInjector injector, uint id = 42)
 		=> new(injector, id);
 
-#if !WINDOWS_UWP
+#if !WINAPPSDK
 	public static Mouse GetMouse(this InputInjector injector)
 		=> new(injector);
 #endif
@@ -337,7 +374,7 @@ public static class InjectedPointerExtensions
 	}
 }
 
-public class Finger : IInjectedPointer, IDisposable
+public partial class Finger : IInjectedPointer, IDisposable
 {
 	private const uint _defaultMoveSteps = 10;
 
@@ -454,24 +491,40 @@ public class Finger : IInjectedPointer, IDisposable
 	private static InjectedInputPoint At(Point position)
 		=> At(position.X, position.Y);
 
+#if !HAS_UNO
+	[LibraryImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static partial bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
+	[StructLayout(LayoutKind.Sequential)]
+	private struct RECT
+	{
+		public int Left;
+		public int Top;
+		public int Right;
+		public int Bottom;
+	}
+
+#endif
+
 	private static InjectedInputPoint At(double x, double y)
 #if HAS_UNO
 		=> new() { PositionX = (int)x, PositionY = (int)y };
 #else
 	{
-		var bounds = Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().VisibleBounds;
-		var scale = Windows.Graphics.Display.DisplayInformation.GetForCurrentView().RawPixelsPerViewPixel;
+		RECT rect = new();
+		GetWindowRect(WinRT.Interop.WindowNative.GetWindowHandle(TestServices.WindowHelper.CurrentTestWindow), ref rect);
+		var scale = TestServices.WindowHelper.CurrentTestWindow.Content.XamlRoot.RasterizationScale;
 
 		return new()
 		{
-			PositionX = (int)((bounds.X + x) * scale),
-			PositionY = (int)((bounds.Y + y) * scale),
+			PositionX = (int)((rect.Left + x) * scale),
+			PositionY = (int)((rect.Top + y) * scale),
 		};
 	}
 #endif
 }
 
-#if !WINDOWS_UWP
+#if !WINAPPSDK
 public class Mouse : IInjectedPointer, IDisposable
 {
 	private readonly InputInjector _input;

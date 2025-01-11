@@ -18,10 +18,10 @@ namespace Windows.Devices.Sensors
 
 		private DateTimeOffset _lastReading = DateTimeOffset.MinValue;
 
-		private Accelerometer()
-		{
-		}
-
+		/// <summary>
+		/// This method is not supported directly. An approximation in the form of raising the 
+		/// ReadingChanged event only when enough time has passed since the last report.
+		/// </summary>
 		public uint ReportInterval { get; set; }
 
 		private static Accelerometer TryCreateInstance()
@@ -81,7 +81,7 @@ namespace Windows.Devices.Sensors
 		/// <param name="y">Accelerometer Y</param>
 		/// <param name="z">Accelerometer Z</param>
 		/// <returns>0 - needed to bind method from WASM</returns>
-		public static int DispatchReading(float x, float y, float z)
+		internal static int DispatchReading(float x, float y, float z)
 		{
 			if (_instance == null)
 			{
