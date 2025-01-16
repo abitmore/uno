@@ -4,19 +4,38 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Uno.Helpers;
 using Windows.Foundation;
 
 namespace Windows.Devices.Sensors
 {
+	/// <summary>
+	/// Represents a magnetic sensor.
+	/// </summary>
 	public partial class Magnetometer
 	{
-		private readonly static object _syncLock = new object();
+		private readonly static object _syncLock = new();
 
 		private static Magnetometer _instance;
 		private static bool _initializationAttempted;
 
-		private TypedEventHandler<Magnetometer, MagnetometerReadingChangedEventArgs> _readingChanged;
+		private readonly StartStopTypedEventWrapper<Magnetometer, MagnetometerReadingChangedEventArgs> _readingChangedWrapper;
 
+		/// <summary>
+		/// Hides the public parameterless constructor
+		/// </summary>
+		private Magnetometer()
+		{
+			_readingChangedWrapper = new StartStopTypedEventWrapper<Magnetometer, MagnetometerReadingChangedEventArgs>(
+				() => StartReading(),
+				() => StopReading(),
+				_syncLock);
+		}
+
+		/// <summary>
+		/// Returns the default magnetometer.
+		/// </summary>
+		/// <returns>The default magnetometer.</returns>
 		public static Magnetometer GetDefault()
 		{
 			if (_initializationAttempted)
@@ -34,36 +53,18 @@ namespace Windows.Devices.Sensors
 			}
 		}
 
+		/// <summary>
+		/// Occurs each time the compass reports a new sensor reading.
+		/// </summary>
 		public event TypedEventHandler<Magnetometer, MagnetometerReadingChangedEventArgs> ReadingChanged
 		{
-			add
-			{
-				lock (_syncLock)
-				{
-					var isFirstSubscriber = _readingChanged == null;
-					_readingChanged += value;
-					if (isFirstSubscriber)
-					{
-						StartReading();
-					}
-				}
-			}
-			remove
-			{
-				lock (_syncLock)
-				{
-					_readingChanged -= value;
-					if (_readingChanged == null)
-					{
-						StopReading();
-					}
-				}
-			}
+			add => _readingChangedWrapper.AddHandler(value);
+			remove => _readingChangedWrapper.RemoveHandler(value);
 		}
 
 		private void OnReadingChanged(MagnetometerReading reading)
 		{
-			_readingChanged?.Invoke(this, new MagnetometerReadingChangedEventArgs(reading));
+			_readingChangedWrapper.Invoke(this, new MagnetometerReadingChangedEventArgs(reading));
 		}
 	}
 }

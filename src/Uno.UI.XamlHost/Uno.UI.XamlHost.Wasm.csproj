@@ -1,6 +1,6 @@
-﻿<Project Sdk="MSBuild.Sdk.Extras" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
+	<PropertyGroup>
 		<TargetFrameworks>$(NetWasmPreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
@@ -21,13 +21,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Include="LinkerDefinition.Wasm.xml">
-	    <LogicalName>$(AssemblyName).xml</LogicalName>
-	  </EmbeddedResource>
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
+		<EmbeddedResource Include="LinkerDefinition.Wasm.xml">
+			<LogicalName>$(AssemblyName).xml</LogicalName>
+		</EmbeddedResource>
 	</ItemGroup>
 
 	<ItemGroup>

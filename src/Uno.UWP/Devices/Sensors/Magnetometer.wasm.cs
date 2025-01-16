@@ -12,10 +12,10 @@ namespace Windows.Devices.Sensors
 	{
 		private DateTimeOffset _lastReading = DateTimeOffset.MinValue;
 
-		private Magnetometer()
-		{
-		}
-
+		/// <summary>
+		/// This method is not supported directly. An approximation in the form of raising the 
+		/// ReadingChanged event only when enough time has passed since the last report.
+		/// </summary>
 		public uint ReportInterval { get; set; }
 
 		private static Magnetometer TryCreateInstance()
@@ -45,7 +45,7 @@ namespace Windows.Devices.Sensors
 		/// <param name="z">Magnetic field Z</param>
 		/// <returns>0 - needed to bind method from WASM</returns>
 		[JSExport]
-		public static int DispatchReading(float x, float y, float z)
+		internal static int DispatchReading(float x, float y, float z)
 		{
 			if (_instance == null)
 			{

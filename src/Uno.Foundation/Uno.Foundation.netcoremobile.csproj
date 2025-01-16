@@ -1,14 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="15.0">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>$(NetCurrentNetCoreMobile);$(NetPreviousNetCoreMobile)</TargetFrameworks>
+		<TargetFrameworks>$(NetMobilePreviousAndCurrent)</TargetFrameworks>
 	</PropertyGroup>
 
 	<Import Project="../targetframework-override.props" />
 
 	<PropertyGroup>
 		<AssemblyName>Uno.Foundation</AssemblyName>
-    	<RootNamespace>Windows.Foundation</RootNamespace>
+		<RootNamespace>Windows.Foundation</RootNamespace>
 		<NoWarn>$(NoWarn);1572;1712;1711;1574</NoWarn>
 
 		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
@@ -36,7 +36,7 @@
 	<Import Project="Uno.Core.Extensions\Uno.Core.Extensions.props" />
 
 	<ItemGroup>
-	  <UpToDateCheckInput Remove="Extensions\RectExtensions.cs" />
+		<UpToDateCheckInput Remove="Extensions\RectExtensions.cs" />
 	</ItemGroup>
 
 
