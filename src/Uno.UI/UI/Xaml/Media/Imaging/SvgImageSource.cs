@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.IO;
 using System.Threading;
@@ -9,7 +9,7 @@ using Windows.UI.Core;
 using Uno;
 using Uno.UI.Xaml.Media;
 
-namespace Windows.UI.Xaml.Media.Imaging;
+namespace Microsoft.UI.Xaml.Media.Imaging;
 
 /// <summary>
 /// Provides a source object for properties that use a Scalable Vector Graphics (SVG) source. You can define a SvgImageSource
@@ -107,6 +107,8 @@ public partial class SvgImageSource : ImageSource
 			{
 				tcs.TrySetResult(_lastStatus ?? SvgImageSourceLoadStatus.Other);
 			}
+#elif IS_UNIT_TESTS
+			return Task.FromResult(SvgImageSourceLoadStatus.Other);
 #else
 			Stream = streamSource.CloneStream().AsStream();
 			StreamLoaded?.Invoke(this, EventArgs.Empty);
@@ -118,7 +120,7 @@ public partial class SvgImageSource : ImageSource
 		return AsyncOperation.FromTask(SetSourceAsync);
 	}
 
-#if !__CROSSRUNTIME__
+#if !__CROSSRUNTIME__ && !IS_UNIT_TESTS
 	internal event EventHandler? StreamLoaded;
 #endif
 
@@ -136,20 +138,22 @@ public partial class SvgImageSource : ImageSource
 		Opened?.Invoke(this, new SvgImageSourceOpenedEventArgs());
 	}
 
-#if __ANDROID__ || __SKIA__
-	private async Task<ImageData> ReadFromStreamAsync(Stream stream, CancellationToken ct)
+	internal bool UseRasterized => !double.IsNaN(RasterizePixelWidth) && !double.IsNaN(RasterizePixelHeight);
+
+#if __CROSSRUNTIME__
+	public override string ToString()
 	{
-		if (stream.CanSeek && stream.Position != 0)
+		if (AbsoluteUri is { } uri)
 		{
-			stream.Position = 0;
+			return $"{GetType().Name}/{uri}";
 		}
 
-		var memoryStream = new MemoryStream();
-		await stream.CopyToAsync(memoryStream, 81920, ct);
-		var data = memoryStream.ToArray();
-		return ImageData.FromBytes(data);
+		if (_stream is { } stream)
+		{
+			return $"{GetType().Name}/{stream.GetType()}";
+		}
+
+		return $"{GetType().Name}/-empty-";
 	}
 #endif
-
-	internal bool UseRasterized => !double.IsNaN(RasterizePixelWidth) && !double.IsNaN(RasterizePixelHeight);
 }

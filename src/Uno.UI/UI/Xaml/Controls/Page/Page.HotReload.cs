@@ -2,9 +2,9 @@
 using System.Reflection.Metadata;
 using Uno.Foundation.Logging;
 
-[assembly: ElementMetadataUpdateHandlerAttribute(typeof(Windows.UI.Xaml.Controls.Page), typeof(Windows.UI.Xaml.Controls.PageElementMetadataUpdateHandler))]
+[assembly: ElementMetadataUpdateHandlerAttribute(typeof(Microsoft.UI.Xaml.Controls.Page), typeof(Microsoft.UI.Xaml.Controls.PageElementMetadataUpdateHandler))]
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	internal static partial class PageElementMetadataUpdateHandler
 	{
@@ -18,12 +18,17 @@ namespace Windows.UI.Xaml.Controls
 					typeof(PageElementMetadataUpdateHandler).Log().Trace($"Instance of {oldPage.GetType().Name} replaced by instance of {newPage.GetType().Name}");
 				}
 
+#if HAS_UNO
 				newPage.Frame = oldPage.Frame;
+#endif
 
-				// If we've replaced the Page in its frame, we may need to
-				// swap the content property as well. It may be required
-				// if the frame is handled by a (native) FramePresenter.
-				newPage.Frame.Content = newPage;
+				if (newPage.Frame is not null)
+				{
+					// If we've replaced the Page in its frame, we may need to
+					// swap the content property as well. It may be required
+					// if the frame is handled by a (native) FramePresenter.
+					newPage.Frame.Content = newPage;
+				}
 			}
 			else
 			{

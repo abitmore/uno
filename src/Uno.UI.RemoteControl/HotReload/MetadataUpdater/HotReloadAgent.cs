@@ -11,8 +11,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Metadata;
 using Uno;
+using Uno.UI.Helpers;
 
 namespace Uno.UI.RemoteControl.HotReload.MetadataUpdater;
 
@@ -61,7 +61,7 @@ internal sealed class HotReloadAgent : IDisposable
 
 	[UnconditionalSuppressMessage("Trimmer", "IL2072",
 		Justification = "The handlerType passed to GetHandlerActions is preserved by MetadataUpdateHandlerAttribute with DynamicallyAccessedMemberTypes.All.")]
-	private UpdateHandlerActions GetMetadataUpdateHandlerActions()
+	internal UpdateHandlerActions GetMetadataUpdateHandlerActions()
 	{
 		// We need to execute MetadataUpdateHandlers in a well-defined order. For v1, the strategy that is used is to topologically
 		// sort assemblies so that handlers in a dependency are executed before the dependent (e.g. the reflection cache action
@@ -72,24 +72,33 @@ internal sealed class HotReloadAgent : IDisposable
 		var handlerActions = new UpdateHandlerActions();
 		foreach (var assembly in sortedAssemblies)
 		{
-			foreach (var attr in assembly.GetCustomAttributesData())
+			try
 			{
-				// Look up the attribute by name rather than by type. This would allow netstandard targeting libraries to
-				// define their own copy without having to cross-compile.
-				if (attr.AttributeType.FullName != "System.Reflection.Metadata.MetadataUpdateHandlerAttribute")
+				foreach (var attr in assembly.GetCustomAttributesData())
 				{
-					continue;
-				}
+					// Look up the attribute by name rather than by type. This would allow netstandard targeting libraries to
+					// define their own copy without having to cross-compile.
+					if (attr is not { AttributeType.FullName: "System.Reflection.Metadata.MetadataUpdateHandlerAttribute" })
+					{
+						continue;
+					}
 
-				IList<CustomAttributeTypedArgument> ctorArgs = attr.ConstructorArguments;
-				if (ctorArgs.Count != 1 ||
-					ctorArgs[0].Value is not Type handlerType)
-				{
-					_log($"'{attr}' found with invalid arguments.");
-					continue;
+					if (attr is { ConstructorArguments: [{ Value: Type handlerType }] })
+					{
+						GetHandlerActions(handlerActions, handlerType);
+					}
+					else
+					{
+						_log($"'{attr}' found with invalid arguments.");
+					}
 				}
-
-				GetHandlerActions(handlerActions, handlerType);
+			}
+			catch (Exception e)
+			{
+				// The handlers enumeration may fail for WPF assemblies that are part of the modified assemblies
+				// when building under linux, but which are loaded in that context. We can ignore those assemblies
+				// and continue the processing.
+				_log($"Unable to process assembly {assembly}, ({e.Message})");
 			}
 		}
 
@@ -141,9 +150,7 @@ internal sealed class HotReloadAgent : IDisposable
 			};
 		}
 
-		MethodInfo? GetUpdateMethod(
-		[DynamicallyAccessedMembers(HotReloadHandlerLinkerFlags)]
-		Type handlerType, string name)
+		MethodInfo? GetUpdateMethod([DynamicallyAccessedMembers(HotReloadHandlerLinkerFlags)] Type handlerType, string name)
 		{
 			if (handlerType.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(Type[]) }, null) is MethodInfo updateMethod &&
 				updateMethod.ReturnType == typeof(void))
@@ -221,7 +228,7 @@ internal sealed class HotReloadAgent : IDisposable
 
 		try
 		{
-			// Defer discovering metadata updata handlers until after hot reload deltas have been applied.
+			// Defer discovering metadata update handlers until after hot reload deltas have been applied.
 			// This should give enough opportunity for AppDomain.GetAssemblies() to be sufficiently populated.
 			_handlerActions ??= GetMetadataUpdateHandlerActions();
 			var handlerActions = _handlerActions;
@@ -232,6 +239,8 @@ internal sealed class HotReloadAgent : IDisposable
 			handlerActions.UpdateApplication.ForEach(a => a(updatedTypes));
 
 			_log("Deltas applied.");
+
+			MetadataUpdaterHelper.RaiseMetadataUpdated();
 		}
 		catch (Exception ex)
 		{
@@ -245,7 +254,7 @@ internal sealed class HotReloadAgent : IDisposable
 	}
 
 	[UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Hot reload is only expected to work when trimming is disabled.")]
-	private static Type[] GetMetadataUpdateTypes(IReadOnlyList<UpdateDelta> deltas)
+	private Type[] GetMetadataUpdateTypes(IReadOnlyList<UpdateDelta> deltas)
 	{
 		List<Type>? types = null;
 
@@ -268,6 +277,14 @@ internal sealed class HotReloadAgent : IDisposable
 					types.Add(type);
 				}
 			}
+		}
+
+		if (types?.Count != deltas.SelectMany(d => d.UpdatedTypes ?? Array.Empty<int>()).Count())
+		{
+			// List all the types that were updated but not found in the assembly.
+			_log(
+				"Some types were marked as updated, but were not found in the running app. " +
+				"This may indicate a configuration mismatch between the compiled app and the hot reload engine.");
 		}
 
 		return types?.ToArray() ?? Type.EmptyTypes;

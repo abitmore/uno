@@ -17,10 +17,10 @@ using View = AppKit.NSView;
 using Color = AppKit.NSColor;
 using Font = AppKit.NSFont;
 #else
-using View = Windows.UI.Xaml.UIElement;
+using View = Microsoft.UI.Xaml.UIElement;
 #endif
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class ScrollContentPresenter : ContentPresenter, ILayoutConstraints
 	{
@@ -44,15 +44,55 @@ namespace Windows.UI.Xaml.Controls
 			{
 				if (_scroller is { } oldScroller)
 				{
+#if UNO_HAS_MANAGED_SCROLL_PRESENTER
+					if (oldScroller.Target is ScrollViewer oldScrollerTarget)
+					{
+						UnhookScrollEvents(oldScrollerTarget);
+					}
+#endif
 					WeakReferencePool.ReturnWeakReference(this, oldScroller);
 				}
 
 				_scroller = WeakReferencePool.RentWeakReference(this, value);
+#if UNO_HAS_MANAGED_SCROLL_PRESENTER
+				if (IsInLiveTree && value is ScrollViewer newTarget)
+				{
+					HookScrollEvents(newTarget);
+				}
+#endif
 			}
 		}
 		#endregion
 
 		private ScrollViewer Scroller => ScrollOwner as ScrollViewer;
+
+		internal double TargetHorizontalOffset =>
+#if __WASM__ // On wasm the scroll might be async (especially with disableAnimation: false), so we need to use the pending value to support high speed multiple scrolling events
+			_pendingScrollTo?.horizontal ?? HorizontalOffset;
+#else
+			HorizontalOffset;
+#endif
+
+		internal double TargetVerticalOffset =>
+#if __WASM__ // On wasm the scroll might be async (especially with disableAnimation: false), so we need to use the pending value to support high speed multiple scrolling events
+			_pendingScrollTo?.vertical ?? VerticalOffset;
+#else
+			VerticalOffset;
+#endif
+
+#if UNO_HAS_MANAGED_SCROLL_PRESENTER || __WASM__
+		public static DependencyProperty SizesContentToTemplatedParentProperty { get; } = DependencyProperty.Register(
+			nameof(SizesContentToTemplatedParent),
+			typeof(bool),
+			typeof(ScrollContentPresenter),
+			new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsMeasure));
+
+		public bool SizesContentToTemplatedParent
+		{
+			get => (bool)GetValue(SizesContentToTemplatedParentProperty);
+			set => SetValue(SizesContentToTemplatedParentProperty, value);
+		}
+#endif
 
 		public Rect MakeVisible(UIElement visual, Rect rectangle)
 		{
@@ -136,13 +176,40 @@ namespace Windows.UI.Xaml.Controls
 					.AtMost(maxSize)
 					.AtLeast(minSize);
 
+				bool sizesContentToTemplatedParent = SizesContentToTemplatedParent;
+
+				if (ScrollOwner is ScrollViewer scrollViewer)
+				{
+					if (sizesContentToTemplatedParent)
+					{
+						slotSize = scrollViewer.ViewportMeasureSize;
+					}
+				}
+
+				// when set to true, this means that we wanted to set to infinity but were blocked in doing it.
+				bool childPreventsInfiniteAvailableWidth = false;
+				bool childPreventsInfiniteAvailableHeight = false;
+
 				if (CanVerticallyScroll)
 				{
-					slotSize.Height = double.PositiveInfinity;
+					childPreventsInfiniteAvailableHeight = !child.WantsScrollViewerToObscureAvailableSizeBasedOnScrollBarVisibility(Orientation.Vertical);
+					if (!sizesContentToTemplatedParent && !childPreventsInfiniteAvailableHeight)
+					{
+						slotSize.Height = double.PositiveInfinity;
+					}
 				}
 				if (CanHorizontallyScroll)
 				{
-					slotSize.Width = double.PositiveInfinity;
+					childPreventsInfiniteAvailableWidth = !child.WantsScrollViewerToObscureAvailableSizeBasedOnScrollBarVisibility(Orientation.Horizontal);
+					if (!sizesContentToTemplatedParent && !childPreventsInfiniteAvailableWidth)
+					{
+						slotSize.Width = double.PositiveInfinity;
+					}
+				}
+
+				if (child is ItemsPresenter itemsPresenter)
+				{
+					itemsPresenter.EvaluateAndSetNonClippingBehavior(childPreventsInfiniteAvailableWidth || childPreventsInfiniteAvailableHeight);
 				}
 
 				child.Measure(slotSize);
@@ -153,8 +220,8 @@ namespace Windows.UI.Xaml.Controls
 				(child as ICustomScrollInfo)?.ApplyViewport(ref desired);
 
 				return new Size(
-					Math.Min(slotSize.Width, desired.Width),
-					Math.Min(slotSize.Height, desired.Height)
+					Math.Min(availableSize.Width, desired.Width),
+					Math.Min(availableSize.Height, desired.Height)
 				);
 			}
 
@@ -184,6 +251,12 @@ namespace Windows.UI.Xaml.Controls
 		internal override bool IsViewHit()
 			=> true;
 
+#if __CROSSRUNTIME__
+		// This may need to be adjusted if/when CanContentRenderOutsideBounds is implemented.
+		private protected override Rect? GetClipRect(bool needsClipToSlot, Point visualOffset, Rect finalRect, Size maxSize, Thickness margin)
+			=> new Rect(default, RenderSize);
+#endif
+
 		private void PointerWheelScroll(object sender, Input.PointerRoutedEventArgs e)
 		{
 			var properties = e.GetCurrentPoint(null).Properties;
@@ -196,37 +269,30 @@ namespace Windows.UI.Xaml.Controls
 					? -properties.MouseWheelDelta
 					: properties.MouseWheelDelta;
 
+				var success = false;
+
 				if (e.KeyModifiers == VirtualKeyModifiers.Control)
 				{
 					// TODO: Handle zoom https://github.com/unoplatform/uno/issues/4309
 				}
-				else if (!canScrollVertically || properties.IsHorizontalMouseWheel || e.KeyModifiers == VirtualKeyModifiers.Shift)
+				else if (canScrollHorizontally && (properties.IsHorizontalMouseWheel || e.KeyModifiers == VirtualKeyModifiers.Shift))
 				{
-					if (canScrollHorizontally)
-					{
-#if __WASM__ // On wasm the scroll might be async (especially with disableAnimation: false), so we need to use the pending value to support high speed multiple wheel events
-						var horizontalOffset = _pendingScrollTo?.horizontal ?? HorizontalOffset;
-#else
-						var horizontalOffset = HorizontalOffset;
-#endif
-
-						Set(
-							horizontalOffset: horizontalOffset + GetHorizontalScrollWheelDelta(DesiredSize, delta),
-							disableAnimation: false);
-					}
-				}
-				else
-				{
-#if __WASM__ // On wasm the scroll might be async (especially with disableAnimation: false), so we need to use the pending value to support high speed multiple wheel events
-					var verticalOffset = _pendingScrollTo?.vertical ?? VerticalOffset;
-#else
-					var verticalOffset = VerticalOffset;
-#endif
-
-					Set(
-						verticalOffset: verticalOffset + GetVerticalScrollWheelDelta(DesiredSize, -delta),
+					success = Set(
+						horizontalOffset: TargetHorizontalOffset + GetHorizontalScrollWheelDelta(DesiredSize, delta),
 						disableAnimation: false);
 				}
+				else if (canScrollVertically && !properties.IsHorizontalMouseWheel)
+				{
+					success = Set(
+						verticalOffset: TargetVerticalOffset + GetVerticalScrollWheelDelta(DesiredSize, -delta),
+						disableAnimation: false);
+				}
+
+				// This is not similar to what WinUI is doing, since we already differ quite a bit from
+				// the way WinUI does SCP scrolling. On WinUI, ScrollViewer is the PointerWheelChanged receiver
+				// and is the one that decides when to mark as handled. However, this alternative is visually
+				// close (even though not identical)
+				e.Handled = success;
 			}
 		}
 
@@ -266,6 +332,10 @@ namespace Windows.UI.Xaml.Controls
 
 			return result;
 		}
+#endif
+
+#if __WASM__ || __NETSTD_REFERENCE__
+		protected override void OnContentChanged(object oldValue, object newValue) => base.OnContentChanged(oldValue, newValue);
 #endif
 	}
 }
