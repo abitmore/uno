@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace UnoIslandsSamplesApp.Skia.Wpf
 {
@@ -10,6 +11,12 @@ namespace UnoIslandsSamplesApp.Skia.Wpf
 			xamlHost.Loaded += XamlHost_Loaded;
 		}
 
-		private async void XamlHost_Loaded(object sender, RoutedEventArgs e) => await SamplesApp.App.HandleSkiaRuntimeTests(string.Join(";", System.Environment.GetCommandLineArgs()));
+		private async void XamlHost_Loaded(object sender, RoutedEventArgs e)
+		{
+#if HAS_UNO
+			Assert.IsNotNull(xamlHost.Child.XamlRoot?.VisualTree.ContentRoot.CompositionContent, "ContentIsland of the ContentRoot should have been set by now.");
+#endif
+			await SamplesApp.App.HandleRuntimeTests(string.Join(";", System.Environment.GetCommandLineArgs()));
+		}
 	}
 }

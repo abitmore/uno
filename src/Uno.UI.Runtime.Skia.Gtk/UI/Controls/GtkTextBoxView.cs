@@ -8,12 +8,14 @@ using Uno.Foundation.Logging;
 using Uno.UI.Runtime.Skia.Gtk.UI.Text;
 using Uno.UI.Xaml.Controls.Extensions;
 using Windows.UI.Text;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Media;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Uno.UI.Runtime.Skia.Gtk.Extensions;
-using static Windows.UI.Xaml.Shapes.BorderLayerRenderer;
 using GtkWindow = Gtk.Window;
+using Uno.UI.Runtime.Skia.Gtk.Helpers.Dpi;
+using Windows.Graphics.Display;
+using Uno.UI.Runtime.Skia.Gtk.UI.Controls;
 
 namespace Uno.UI.Runtime.Skia.Gtk.UI.Xaml.Controls;
 
@@ -24,14 +26,18 @@ internal abstract class GtkTextBoxView : IOverlayTextBoxView
 	private static bool _warnedAboutSelectionColorChanges;
 
 	private readonly string _textBoxViewId = Guid.NewGuid().ToString();
+	private readonly XamlRoot? _xamlRoot;
 	private CssProvider? _foregroundCssProvider;
 	private Windows.UI.Color? _lastForegroundColor;
 
-	protected GtkTextBoxView()
+	protected GtkTextBoxView(XamlRoot? xamlRoot)
 	{
+		_xamlRoot = xamlRoot;
 		// Applies themes from Theming/UnoGtk.css
 		InputWidget.StyleContext.AddClass(TextBoxViewCssClass);
 	}
+
+	public event TextControlPasteEventHandler? Paste;
 
 	/// <summary>
 	/// Represents the root widget of the input layout.
@@ -49,12 +55,12 @@ internal abstract class GtkTextBoxView : IOverlayTextBoxView
 
 	public static IOverlayTextBoxView Create(TextBox textBox) =>
 		textBox is PasswordBox || !textBox.AcceptsReturn ?
-			new SinglelineTextBoxView(textBox is PasswordBox) :
-			new MultilineTextBoxView();
+			new SinglelineTextBoxView(textBox is PasswordBox, textBox.XamlRoot) :
+			new MultilineTextBoxView(textBox.XamlRoot);
 
 	public void AddToTextInputLayer(XamlRoot xamlRoot)
 	{
-		if (GtkCoreWindowExtension.GetOverlayLayer(xamlRoot) is { } layer && RootWidget.Parent != layer)
+		if (GtkManager.XamlRootMap.GetHostForRoot(xamlRoot)?.NativeOverlayLayer is { } layer && RootWidget.Parent != layer)
 		{
 			layer.Put(RootWidget, 0, 0);
 			layer.ShowAll();
@@ -92,26 +98,31 @@ internal abstract class GtkTextBoxView : IOverlayTextBoxView
 
 	public void SetSize(double width, double height)
 	{
-		RootWidget.SetSizeRequest((int)width, (int)height);
-		InputWidget.SetSizeRequest((int)width, (int)height);
+		var sizeAdjustment = _xamlRoot?.FractionalScaleAdjustment ?? 1.0;
+		RootWidget.SetSizeRequest((int)(width * sizeAdjustment), (int)(height * sizeAdjustment));
+		InputWidget.SetSizeRequest((int)(width * sizeAdjustment), (int)(height * sizeAdjustment));
 	}
 
 	public void SetPosition(double x, double y)
 	{
 		if (RootWidget.Parent is Fixed layer)
 		{
-			layer.Move(RootWidget, (int)x, (int)y);
+			var sizeAdjustment = _xamlRoot?.FractionalScaleAdjustment ?? 1.0;
+			layer.Move(RootWidget, (int)(x * sizeAdjustment), (int)(y * sizeAdjustment));
 		}
 	}
 
+	protected void RaisePaste(TextControlPasteEventArgs args) => Paste?.Invoke(this, args);
+
 	private void SetFont(TextBox textBox)
 	{
+		var sizeAdjustment = _xamlRoot?.FractionalScaleAdjustment ?? 1.0;
 		var fontDescription = new FontDescription
 		{
 			Weight = textBox.FontWeight.ToPangoWeight(),
 			Style = textBox.FontStyle.ToGtkFontStyle(),
 			Stretch = textBox.FontStretch.ToGtkFontStretch(),
-			AbsoluteSize = textBox.FontSize * Pango.Scale.PangoScale,
+			AbsoluteSize = textBox.FontSize * Pango.Scale.PangoScale * sizeAdjustment,
 		};
 #pragma warning disable CS0612 // Type or member is obsolete
 		InputWidget.OverrideFont(fontDescription);

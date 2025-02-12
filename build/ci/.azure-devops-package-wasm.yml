@@ -1,22 +1,13 @@
 parameters:
   poolName: ''
+  UNO_UWP_BUILD: ''
+  XAML_FLAVOR_BUILD: ''
 
 jobs:
 - job: wasm_package_build
   displayName: 'WebAssembly Package Binaries'
 
-  pool:
-    vmImage: ${{ parameters.vmImage }}
-
-  strategy:
-    matrix:
-      UWP:
-        UNO_UWP_BUILD: true
-        XAML_FLAVOR_BUILD: UWP
-
-      WinUI:
-        UNO_UWP_BUILD: false
-        XAML_FLAVOR_BUILD: WinUI
+  pool: ${{ parameters.poolName }}
 
   variables:
     CombinedConfiguration: Release|Any CPU
@@ -24,8 +15,8 @@ jobs:
 
     NUGET_PACKAGES: $(build.sourcesdirectory)/.nuget
 
-    # Disabled until the wasm bootstrap can be updated to .NET 8 Pre 3 or later
-    UnoDisableNet8Mobile: true
+    UNO_UWP_BUILD: ${{ parameters.UNO_UWP_BUILD }}
+    XAML_FLAVOR_BUILD: ${{ parameters.XAML_FLAVOR_BUILD }}
 
   steps:
   - checkout: self
@@ -38,11 +29,6 @@ jobs:
       nugetPackages: $(NUGET_PACKAGES)
 
   - template: templates/gitversion.yml
-
-  - script: |
-      cp global.json global-net7.json
-      cp global-net8.json global.json
-    displayName: Replace global.json with .NET 8
 
   - template: templates/dotnet-install.yml
 

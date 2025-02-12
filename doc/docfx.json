@@ -8,19 +8,22 @@
                 "files": [
                     "articles/**.md",
                     "articles/**/toc.yml",
-                    "toc.yml",
                     "*.md"
+                ],
+                "exclude": [
+                    "**/includes/**"
                 ]
             }
         ],
         "resource": [
             {
-                "files": [
-                    "images/**",
-                    "articles/**.png",
-                    "articles/**.jpg",
-                    "articles/**.gif"
-                ]
+				"files": [
+					"images/**",
+					"articles/**.png",
+					"articles/**.jpg",
+					"articles/**.gif",
+					"articles/**.svg"
+				]
             }
         ],
         "overwrite": [
@@ -35,6 +38,15 @@
         "template": ["default", "templates/uno"],
         "postProcessors": ["ExtractSearchIndex"],
         "markdownEngineName": "markdig",
+        "markdownEngineProperties": {
+            "markdigExtensions": [
+                "abbreviations",
+                "definitionlists",
+                "tasklists",
+                "footnotes",
+                "diagrams"
+            ]
+        },
         "noLangKeyword": false,
         "keepFileLink": false,
         "cleanupCacheHistory": false,

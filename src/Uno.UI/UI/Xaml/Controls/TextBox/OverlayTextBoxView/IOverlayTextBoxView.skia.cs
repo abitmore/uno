@@ -1,13 +1,16 @@
 ﻿#nullable enable
 
 using System;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using MuxTextBox = Microsoft.UI.Xaml.Controls.TextBox;
 
 namespace Uno.UI.Xaml.Controls.Extensions;
 
 internal interface IOverlayTextBoxView
 {
+	event TextControlPasteEventHandler? Paste;
+
 	bool IsDisplayed { get; }
 
 	string Text { get; set; }
@@ -25,7 +28,7 @@ internal interface IOverlayTextBoxView
 	/// </summary>
 	/// <param name="textBox">TextBox.</param>
 	/// <returns>True if compatible.</returns>
-	bool IsCompatible(TextBox textBox);
+	bool IsCompatible(MuxTextBox textBox);
 
 	void SetFocus();
 
@@ -39,7 +42,7 @@ internal interface IOverlayTextBoxView
 
 	void SetSize(double width, double height);
 
-	void UpdateProperties(TextBox textBox);
+	void UpdateProperties(MuxTextBox textBox);
 
 	IDisposable ObserveTextChanges(EventHandler onChanged);
 }

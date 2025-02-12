@@ -11,25 +11,42 @@ using Uno.UI.Extensions;
 using Windows.UI.Core;
 using Uno.UI;
 using Uno.UI.Helpers;
-using Windows.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media;
 using Uno.UI.Controls;
 using Windows.UI;
 using Uno.Disposables;
 using ObjCRuntime;
+using Uno.UI.Xaml;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class MultilineTextBoxView : UITextView, ITextBoxView, DependencyObject, IFontScalable, IUIScrollView
 	{
 		private MultilineTextBoxDelegate _delegate;
 		private readonly WeakReference<TextBox> _textBox;
 		private WeakReference<Uno.UI.Controls.Window> _window;
-		private WeakBrushChangedProxy _foregroundChangedProxy;
 		private Action _foregroundChanged;
+		private IDisposable _foregroundBrushChangedSubscription;
 
-		partial void FinalizerPartial()
+		public override void Paste(NSObject sender) => HandlePaste(() => base.Paste(sender));
+
+		public override void PasteAndGo(NSObject sender) => HandlePaste(() => base.PasteAndGo(sender));
+
+		public override void PasteAndMatchStyle(NSObject sender) => HandlePaste(() => base.PasteAndMatchStyle(sender));
+
+		public override void PasteAndSearch(NSObject sender) => HandlePaste(() => base.PasteAndSearch(sender));
+
+		public override void Paste(NSItemProvider[] itemProviders) => HandlePaste(() => base.Paste(itemProviders));
+
+		private void HandlePaste(Action baseAction)
 		{
-			_foregroundChangedProxy?.Unsubscribe();
+			var args = new TextControlPasteEventArgs();
+			var textBox = _textBox.GetTarget();
+			textBox?.RaisePaste(args);
+			if (!args.Handled)
+			{
+				baseAction.Invoke();
+			}
 		}
 
 		CGPoint IUIScrollView.UpperScrollLimit { get { return (CGPoint)(ContentSize - Frame.Size); } }
@@ -183,7 +200,7 @@ namespace Windows.UI.Xaml.Controls
 
 			if (textBox != null)
 			{
-				var newFont = UIFontHelper.TryGetFont((nfloat)textBox.FontSize, textBox.FontWeight, textBox.FontStyle, textBox.FontFamily);
+				var newFont = FontHelper.TryGetFont(new((nfloat)textBox.FontSize, textBox.FontWeight, textBox.FontStyle, textBox.FontStretch), textBox.FontFamily);
 
 				if (newFont != null)
 				{
@@ -214,27 +231,18 @@ namespace Windows.UI.Xaml.Controls
 		public void OnForegroundChanged(Brush oldValue, Brush newValue)
 		{
 			var textBox = _textBox.GetTarget();
-			_foregroundChangedProxy ??= new();
 			if (textBox != null)
 			{
 				if (newValue is SolidColorBrush scb)
 				{
-					_foregroundChanged = () => ApplyColor();
-					_foregroundChangedProxy.Subscribe(scb, _foregroundChanged);
+					_foregroundBrushChangedSubscription?.Dispose();
+					_foregroundBrushChangedSubscription = Brush.SetupBrushChanged(newValue, ref _foregroundChanged, () => ApplyColor());
 
 					void ApplyColor()
 					{
 						TextColor = scb.Color;
 					}
 				}
-				else
-				{
-					_foregroundChangedProxy.Unsubscribe();
-				}
-			}
-			else
-			{
-				_foregroundChangedProxy.Unsubscribe();
 			}
 		}
 
