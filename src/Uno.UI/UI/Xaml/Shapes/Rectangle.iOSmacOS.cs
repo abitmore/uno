@@ -2,7 +2,7 @@
 using System.Linq;
 using Uno.UI.Extensions;
 using Windows.Foundation;
-using Windows.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media;
 using CoreGraphics;
 
 #if __IOS__
@@ -16,25 +16,16 @@ using _BezierPath = AppKit.NSBezierPath;
 using ObjCRuntime;
 
 
-namespace Windows.UI.Xaml.Shapes
+namespace Microsoft.UI.Xaml.Shapes
 {
 	public partial class Rectangle
 	{
-		static Rectangle()
-		{
-			StretchProperty.OverrideMetadata(typeof(Rectangle), new FrameworkPropertyMetadata(defaultValue: Media.Stretch.Fill));
-		}
-
 		public Rectangle()
 		{
 #if __IOS__
 			ClipsToBounds = true;
 #endif
 		}
-
-		/// <inheritdoc />
-		protected override Size MeasureOverride(Size availableSize)
-			=> base.MeasureRelativeShape(availableSize);
 
 		/// <inheritdoc />
 		protected override Size ArrangeOverride(Size finalSize)

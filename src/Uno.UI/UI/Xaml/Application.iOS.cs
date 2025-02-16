@@ -12,21 +12,19 @@ using Windows.UI.Core;
 using Uno.Foundation.Logging;
 using System.Globalization;
 using System.Threading;
+using Uno.UI.Xaml.Controls;
 
 #if HAS_UNO_WINUI
-using LaunchActivatedEventArgs = Microsoft.UI.Xaml.LaunchActivatedEventArgs;
+using LaunchActivatedEventArgs = Microsoft/* UWP don't rename */.UI.Xaml.LaunchActivatedEventArgs;
 #else
 using LaunchActivatedEventArgs = Windows.ApplicationModel.Activation.LaunchActivatedEventArgs;
 #endif
 
-namespace Windows.UI.Xaml
+namespace Microsoft.UI.Xaml
 {
 	[Register("UnoAppDelegate")]
 	public partial class Application : UIApplicationDelegate
 	{
-		private bool _suspended;
-		internal bool IsSuspended => _suspended;
-
 		private bool _preventSecondaryActivationHandling;
 
 		partial void InitializePartial()
@@ -128,18 +126,7 @@ namespace Windows.UI.Xaml
 			_preventSecondaryActivationHandling = false;
 		}
 
-		private SuspendingOperation CreateSuspendingOperation() =>
-			new SuspendingOperation(DateTimeOffset.Now.AddSeconds(10), () => _suspended = true);
-
-		partial void OnResumingPartial()
-		{
-			if (_suspended)
-			{
-				_suspended = false;
-
-				Resuming?.Invoke(this, null);
-			}
-		}
+		private DateTimeOffset GetSuspendingOffset() => DateTimeOffset.Now.AddSeconds(10);
 
 		public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations(UIApplication application, [Transient] UIWindow forWindow)
 		{
@@ -222,7 +209,7 @@ namespace Windows.UI.Xaml
 
 		private void OnEnteredBackground(NSNotification notification)
 		{
-			Windows.UI.Xaml.Window.Current?.OnNativeVisibilityChanged(false);
+			NativeWindowWrapper.Instance.OnNativeVisibilityChanged(false);
 
 			RaiseEnteredBackground(() => RaiseSuspending());
 		}
@@ -230,17 +217,17 @@ namespace Windows.UI.Xaml
 		private void OnLeavingBackground(NSNotification notification)
 		{
 			RaiseResuming();
-			RaiseLeavingBackground(() => Windows.UI.Xaml.Window.Current?.OnNativeVisibilityChanged(true));
+			RaiseLeavingBackground(() => NativeWindowWrapper.Instance.OnNativeVisibilityChanged(true));
 		}
 
 		private void OnActivated(NSNotification notification)
 		{
-			Windows.UI.Xaml.Window.Current?.OnNativeActivated(CoreWindowActivationState.CodeActivated);
+			NativeWindowWrapper.Instance.OnNativeActivated(CoreWindowActivationState.CodeActivated);
 		}
 
 		private void OnDeactivated(NSNotification notification)
 		{
-			Windows.UI.Xaml.Window.Current?.OnNativeActivated(CoreWindowActivationState.Deactivated);
+			NativeWindowWrapper.Instance.OnNativeActivated(CoreWindowActivationState.Deactivated);
 		}
 
 		private void SetCurrentLanguage()

@@ -1,30 +1,17 @@
 ﻿#nullable enable
 
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Collections.Specialized;
-using System.Globalization;
-using System.Linq;
-using System.Threading;
 using Windows.Foundation;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Media;
-using Uno.Extensions;
-using Windows.UI.Composition;
-using Uno.Disposables;
-using System.IO.Compression;
-using SkiaSharp;
+using Microsoft.UI.Composition;
 using System.Numerics;
 
-namespace Windows.UI.Xaml.Shapes
+namespace Microsoft.UI.Xaml.Shapes
 {
 	partial class Shape
 	{
-		private readonly SerialDisposable _fillSubscription = new();
-		private readonly SerialDisposable _strokeSubscription = new();
 		private readonly CompositionSpriteShape _shape;
 		private readonly CompositionPathGeometry _geometry;
+
+		private protected CompositionSpriteShape SpriteShape => _shape;
 
 		public Shape()
 		{
@@ -37,15 +24,15 @@ namespace Windows.UI.Xaml.Shapes
 			_shape.Comment = "#path";
 #endif
 
-			visual.Shapes.Add(_shape);
+			((ShapeVisual)visual).Shapes.Add(_shape);
 		}
 
 		private Rect GetPathBoundingBox(SkiaGeometrySource2D path)
-			=> path.Geometry.Bounds.ToRect();
+			=> path.TightBounds.ToRect();
 
-		private bool IsFinite(double value) => !double.IsInfinity(value);
+		private protected override ContainerVisual CreateElementVisual() => Compositor.GetSharedCompositor().CreateShapeVisual();
 
-		private protected void Render(Windows.UI.Composition.SkiaGeometrySource2D? path, double? scaleX = null, double? scaleY = null, double? renderOriginX = null, double? renderOriginY = null)
+		private protected virtual void Render(Microsoft.UI.Composition.SkiaGeometrySource2D? path, double? scaleX = null, double? scaleY = null, double? renderOriginX = null, double? renderOriginY = null)
 		{
 			if (path is null)
 			{
@@ -64,18 +51,15 @@ namespace Windows.UI.Xaml.Shapes
 
 		private void UpdateRender()
 		{
-			UpdateFill();
-			UpdateStroke();
+			OnFillBrushChanged();
+			OnStrokeBrushChanged();
 			UpdateStrokeThickness();
+			UpdateStrokeDashArray();
 		}
 
-		private void UpdateFill()
+		private void OnFillBrushChanged()
 		{
-			_fillSubscription.Disposable = null;
-
-			_shape.FillBrush = null;
-
-			_fillSubscription.Disposable = Brush.AssignAndObserveBrush(Fill, Visual.Compositor, compositionBrush => _shape.FillBrush = compositionBrush);
+			_shape.FillBrush = Fill?.GetOrCreateCompositionBrush(Visual.Compositor);
 		}
 
 		private void UpdateStrokeThickness()
@@ -83,13 +67,27 @@ namespace Windows.UI.Xaml.Shapes
 			_shape.StrokeThickness = (float)ActualStrokeThickness;
 		}
 
-		private void UpdateStroke()
+		private void UpdateStrokeDashArray()
 		{
-			_strokeSubscription.Disposable = null;
+			var compositionStrokeDashArray = new CompositionStrokeDashArray(_shape.Compositor);
+			var strokeDashArray = StrokeDashArray;
+			if (strokeDashArray is null)
+			{
+				_shape.StrokeDashArray = null;
+				return;
+			}
 
-			_shape.StrokeBrush = null;
+			for (int i = 0; i < strokeDashArray.Count; i++)
+			{
+				compositionStrokeDashArray.Add((float)strokeDashArray[i]);
+			}
 
-			_strokeSubscription.Disposable = Brush.AssignAndObserveBrush(Stroke, Visual.Compositor, compositionBrush => _shape.StrokeBrush = compositionBrush);
+			_shape.StrokeDashArray = compositionStrokeDashArray;
+		}
+
+		private void OnStrokeBrushChanged()
+		{
+			_shape.StrokeBrush = Stroke?.GetOrCreateCompositionBrush(Visual.Compositor);
 		}
 	}
 }

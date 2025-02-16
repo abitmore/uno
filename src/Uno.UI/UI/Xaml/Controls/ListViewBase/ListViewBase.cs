@@ -8,18 +8,18 @@ using _View = Android.Views.View;
 #elif __IOS__
 using _View = UIKit.UIView;
 #else
-using View = Windows.UI.Xaml.FrameworkElement;
+using View = Microsoft.UI.Xaml.FrameworkElement;
 #endif
 using Uno;
 using Uno.Extensions;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Data;
 using Windows.Foundation.Collections;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Uno.Extensions.Specialized;
 using System.Collections;
 using System.Linq;
-using Windows.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Uno.Foundation.Logging;
 using Uno.Disposables;
 using Uno.Client;
@@ -27,11 +27,11 @@ using System.Threading.Tasks;
 using System.Threading;
 using Windows.Foundation;
 using Uno.UI;
-using Windows.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using Uno.UI.Xaml.Input;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class ListViewBase : Selector
 	{
@@ -78,10 +78,7 @@ namespace Windows.UI.Xaml.Controls
 		{
 			base.OnKeyDown(args);
 
-			if (!args.Handled)
-			{
-				args.Handled = TryHandleKeyDown(args);
-			}
+			args.Handled = TryHandleKeyDown(args);
 		}
 
 		internal bool TryHandleKeyDown(KeyRoutedEventArgs args)
@@ -104,16 +101,30 @@ namespace Windows.UI.Xaml.Controls
 				{
 					OnItemClicked(focusedContainer, args.KeyboardModifiers);
 				}
+
+#if __WASM__
+				((IHtmlHandleableRoutedEventArgs)args).HandledResult &= ~HtmlEventDispatchResult.PreventDefault;
+#endif
+				return true;
 			}
-			else if (args.Key == VirtualKey.Down)
+			else
 			{
-				return TryMoveKeyboardFocusAndSelection(+1, args.KeyboardModifiers);
+				var orientation = ItemsPanelRoot?.PhysicalOrientation ?? Orientation.Vertical;
+
+				switch (args.Key)
+				{
+					case VirtualKey.Down when orientation == Orientation.Vertical:
+						return TryMoveKeyboardFocusAndSelection(+1, args.KeyboardModifiers);
+					case VirtualKey.Up when orientation == Orientation.Vertical:
+						return TryMoveKeyboardFocusAndSelection(-1, args.KeyboardModifiers);
+					case VirtualKey.Right when orientation == Orientation.Horizontal:
+						return TryMoveKeyboardFocusAndSelection(+1, args.KeyboardModifiers);
+					case VirtualKey.Left when orientation == Orientation.Horizontal:
+						return TryMoveKeyboardFocusAndSelection(-1, args.KeyboardModifiers);
+					default:
+						return false;
+				}
 			}
-			else if (args.Key == VirtualKey.Up)
-			{
-				return TryMoveKeyboardFocusAndSelection(-1, args.KeyboardModifiers);
-			}
-			return false;
 		}
 
 		private bool TryMoveKeyboardFocusAndSelection(int offset, VirtualKeyModifiers modifiers)
@@ -123,6 +134,11 @@ namespace Windows.UI.Xaml.Controls
 			var newIndex = prevIndex + offset;
 			var newContainer = ContainerFromIndex(newIndex) as SelectorItem;
 			var newItem = ItemFromIndex(newIndex);
+
+			if (newIndex < 0 || newIndex >= Items.Count)
+			{
+				return false;
+			}
 
 			FocusedIndexContainerItem = (newIndex, newContainer, newItem);
 
@@ -160,6 +176,8 @@ namespace Windows.UI.Xaml.Controls
 					throw new ArgumentOutOfRangeException();
 			}
 
+			// StartBringIntoView shouldn't be needed, since the internal ScrollViewer has BringIntoViewOnFocusChange
+			// but since that property isn't currently supported, we have to manually BringIntoView.
 			newContainer?.StartBringIntoView(new BringIntoViewOptions()
 			{
 				AnimationDesired = false
@@ -430,13 +448,20 @@ namespace Windows.UI.Xaml.Controls
 			// In Single mode, we respond to SelectedIndex changing, which is more reliable if there are duplicate items
 			if (IsSelectionMultiple)
 			{
-				foreach (var item in e.AddedItems)
+				if (e.AddedItems is not null)
 				{
-					SetSelectedState(IndexFromItem(item), true);
+					foreach (var item in e.AddedItems)
+					{
+						SetSelectedState(IndexFromItem(item), true);
+					}
 				}
-				foreach (var item in e.RemovedItems)
+
+				if (e.RemovedItems is not null)
 				{
-					SetSelectedState(IndexFromItem(item), false);
+					foreach (var item in e.RemovedItems)
+					{
+						SetSelectedState(IndexFromItem(item), false);
+					}
 				}
 			}
 		}
@@ -444,6 +469,11 @@ namespace Windows.UI.Xaml.Controls
 		internal override void OnSelectedIndexChanged(int oldSelectedIndex, int newSelectedIndex)
 		{
 			base.OnSelectedIndexChanged(oldSelectedIndex, newSelectedIndex);
+			if (ExtendedShiftSelectionStart == -1)
+			{
+				// only changed if it wasn't already set. This matches the behaviour on WinUI.
+				ExtendedShiftSelectionStart = newSelectedIndex;
+			}
 
 			try
 			{
@@ -530,7 +560,7 @@ namespace Windows.UI.Xaml.Controls
 
 			foreach (var item in GetItemsPanelChildren().OfType<SelectorItem>())
 			{
-				ApplyMultiSelectState(item);
+				item.UpdateMultiSelectStates(useTransitions: item.IsLoaded);
 			}
 
 			ApplyMultiSelectStateToCachedItems();
@@ -539,8 +569,6 @@ namespace Windows.UI.Xaml.Controls
 		partial void ApplyMultiSelectStateToCachedItems();
 
 		partial void PrepareNativeLayout(VirtualizingPanelLayout layout);
-
-
 
 		internal override void OnItemClicked(int clickedIndex, VirtualKeyModifiers modifiers)
 		{
@@ -684,21 +712,15 @@ namespace Windows.UI.Xaml.Controls
 
 		private void FlipSelectionInMultipleSelection(object item, SelectorItem container)
 		{
-			if (!SelectedItems.Contains(item))
+			bool wasSelected = SelectedItems.Remove(item);
+			if (!wasSelected)
 			{
 				SelectedItems.Add(item);
-				if (container is { })
-				{
-					container.IsSelected = true;
-				}
 			}
-			else
+
+			if (container is { })
 			{
-				SelectedItems.Remove(item);
-				if (container is { })
-				{
-					container.IsSelected = false;
-				}
+				container.IsSelected = !wasSelected;
 			}
 		}
 
@@ -716,9 +738,8 @@ namespace Windows.UI.Xaml.Controls
 
 		private void UnselectInMultipleSelection(object item, SelectorItem container)
 		{
-			if (SelectedItems.Contains(item))
+			if (SelectedItems.Remove(item))
 			{
-				SelectedItems.Remove(item);
 				if (container is { } selectorItem)
 				{
 					selectorItem.IsSelected = false;
@@ -1051,7 +1072,7 @@ namespace Windows.UI.Xaml.Controls
 
 			if (element is SelectorItem selectorItem)
 			{
-				ApplyMultiSelectState(selectorItem);
+				selectorItem.UpdateMultiSelectStates(useTransitions: selectorItem.IsLoaded);
 			}
 		}
 
@@ -1069,15 +1090,6 @@ namespace Windows.UI.Xaml.Controls
 			ClearContainerForDragDrop(itemContainer);
 
 			base.ContainerClearedForItem(item, itemContainer);
-		}
-
-		/// <summary>
-		/// Apply the multi-selection state to the provided item
-		/// </summary>
-		/// <param name="selectorItem"></param>
-		internal void ApplyMultiSelectState(SelectorItem selectorItem)
-		{
-			selectorItem.ApplyMultiSelectState(IsSelectionMultiple);
 		}
 
 		/// <summary>

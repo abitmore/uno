@@ -1,13 +1,18 @@
 ﻿#if !IS_UNIT_TESTS
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using Microsoft.UI.Xaml.Media;
 using Uno;
+using Uno.Extensions;
+using Uno.Extensions.Specialized;
 using Uno.UI;
+using Windows.Foundation;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
-	public partial class ItemsStackPanel : Panel, IVirtualizingPanel
+	public partial class ItemsStackPanel : Panel, IVirtualizingPanel, IInsertionPanel
 	{
 		VirtualizingPanelLayout _layout;
 
@@ -19,6 +24,8 @@ namespace Windows.UI.Xaml.Controls
 		[NotImplemented]
 #endif
 		public int LastVisibleIndex => _layout?.LastVisibleIndex ?? -1;
+
+		internal override Orientation? PhysicalOrientation => Orientation;
 
 #if __ANDROID__
 		public int FirstCacheIndex => _layout.XamlParent.NativePanel.ViewCache.FirstCacheIndex;
@@ -57,6 +64,49 @@ namespace Windows.UI.Xaml.Controls
 				_layout.BindToEquivalentProperty(this, nameof(CacheLength));
 #endif
 			}
+		}
+
+		void IInsertionPanel.GetInsertionIndexes(Point position, out int first, out int second)
+		{
+			first = -1;
+			second = -1;
+			if ((new Rect(default, new Size(ActualSize.X, ActualSize.Y))).Contains(position))
+			{
+				if (Children == null || Children.Empty())
+				{
+					return;
+				}
+				if (Orientation == Orientation.Vertical)
+				{
+					foreach (var child in Children)
+					{
+						if (position.Y >= child.ActualOffset.Y + child.ActualSize.Y / 2)
+						{
+							first++;
+						}
+					}
+				}
+				else
+				{
+					foreach (var child in Children)
+					{
+						if (position.X >= child.ActualOffset.X + child.ActualSize.X / 2)
+						{
+							first++;
+						}
+					}
+				}
+				if (first + 1 < Children.Count)
+				{
+					second = first + 1;
+				}
+			}
+		}
+
+		// In WinUI, this is actually for ModernCollectionBasePanel
+		internal override bool WantsScrollViewerToObscureAvailableSizeBasedOnScrollBarVisibility(Orientation orientation)
+		{
+			return Orientation == orientation;
 		}
 	}
 }

@@ -1,35 +1,22 @@
 ﻿#nullable enable
 
 using System;
-using System.Collections.Generic;
-using System.Text;
-using Android.Widget;
-using Uno.UI;
-using Uno.UI.Helpers;
-using Java.Lang.Reflect;
 using Android.Content;
 using Android.Graphics;
 using Android.Graphics.Drawables;
 using Android.OS;
-using Android.Runtime;
 using Android.Text;
-using Android.Views;
 using Android.Views.InputMethods;
 using Android.Widget;
 using AndroidX.Core.Content;
 using AndroidX.Core.Graphics;
 using Java.Lang.Reflect;
-using Uno.Disposables;
-using Uno.Extensions;
 using Uno.Foundation.Logging;
 using Uno.UI;
 using Uno.UI.DataBinding;
-using Uno.UI.Extensions;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
-using Uno.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	internal partial class TextBoxView : EditText, DependencyObject
 	{
@@ -40,8 +27,9 @@ namespace Windows.UI.Xaml.Controls
 		private readonly ManagedWeakReference? _ownerRef;
 		internal TextBox? Owner => _ownerRef?.Target as TextBox;
 
-		private WeakBrushChangedProxy? _foregroundChangedProxy;
 		private Action? _foregroundChanged;
+		private IDisposable? _foregroundBrushChangedSubscription;
+		private bool _isDisposed;
 
 		public TextBoxView(TextBox owner)
 			: base(ContextHelper.Current)
@@ -70,22 +58,6 @@ namespace Windows.UI.Xaml.Controls
 			);
 
 			_inputTypes = (InputType, InputType);
-		}
-
-		partial void FinalizerPartial()
-		{
-			_foregroundChangedProxy?.Unsubscribe();
-		}
-
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				_brushChangedProxy?.Unsubscribe();
-				_foregroundChangedProxy?.Unsubscribe();
-			}
-
-			base.Dispose(disposing);
 		}
 
 		internal void SetInputTypes(InputTypes inputType, InputTypes rawInputType)
@@ -119,6 +91,21 @@ namespace Windows.UI.Xaml.Controls
 				/// at the beginning, even if the text is the same.
 				Text = textSafe;
 			}
+		}
+
+		public override bool OnTextContextMenuItem(int id)
+		{
+			if (id == Android.Resource.Id.Paste)
+			{
+				var args = new TextControlPasteEventArgs();
+				Owner?.RaisePaste(args);
+				if (args.Handled)
+				{
+					return true;
+				}
+			}
+
+			return base.OnTextContextMenuItem(id);
 		}
 
 		protected override void OnTextChanged(Java.Lang.ICharSequence? text, int start, int lengthBefore, int lengthAfter)
@@ -231,7 +218,7 @@ namespace Windows.UI.Xaml.Controls
 						{
 							var colorFilter = BlendModeColorFilterCompat.CreateBlendModeColorFilterCompat(
 								(Android.Graphics.Color)color,
-								BlendModeCompat.SrcAtop);
+								BlendModeCompat.SrcAtop!);
 							drawable?.SetColorFilter(colorFilter);
 						}
 					}
@@ -322,29 +309,33 @@ namespace Windows.UI.Xaml.Controls
 
 		private void OnForegroundChanged(Brush oldValue, Brush newValue)
 		{
-			if (this.IsNullOrDisposed())
-			{
-				_foregroundChangedProxy?.Unsubscribe();
-				return;
-			}
-
-			_foregroundChangedProxy ??= new();
 			if (newValue is SolidColorBrush scb)
 			{
-				_foregroundChanged = () => ApplyColor();
-				_foregroundChangedProxy.Subscribe(scb, _foregroundChanged);
-
+				_foregroundBrushChangedSubscription?.Dispose();
+				_foregroundBrushChangedSubscription = Brush.SetupBrushChanged(newValue, ref _foregroundChanged, () => ApplyColor());
 
 				void ApplyColor()
 				{
+					if (_isDisposed
+
+						// This is based on `Java.Interop.JniPeerMembers.AssertSelf`
+						|| !this.PeerReference.IsValid)
+					{
+						// Binding changes may happen after the
+						// underlying control has been disposed
+						return;
+					}
+
 					SetTextColor(scb.Color);
 					SetCursorColor(scb.Color);
 				}
 			}
-			else
-			{
-				_foregroundChangedProxy.Unsubscribe();
-			}
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			_isDisposed = true;
+			base.Dispose(disposing);
 		}
 	}
 }
