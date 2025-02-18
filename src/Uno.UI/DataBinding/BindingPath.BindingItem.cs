@@ -4,46 +4,49 @@
 using System;
 using Uno.Disposables;
 using Uno.Foundation.Logging;
-using Windows.UI.Xaml;
+using Uno.UI.Xaml.Input;
+using Windows.ApplicationModel.Appointments;
+using Microsoft.UI.Xaml;
 
 namespace Uno.UI.DataBinding
 {
 	internal partial class BindingPath
 	{
-		private sealed class BindingItem : IBindingItem, IDisposable
+		private sealed class BindingItem : IBindingItem, IDisposable, IEquatable<BindingItem>
 		{
-			private delegate void PropertyChangedHandler(object? previousValue, object? newValue, bool shouldRaiseValueChanged);
-
 			private ManagedWeakReference? _dataContextWeakStorage;
+			private Flags _flags;
 
 			private readonly SerialDisposable _propertyChanged = new SerialDisposable();
-			private bool _disposed;
-			private readonly DependencyPropertyValuePrecedences? _precedence;
-			private readonly object? _fallbackValue;
-			private readonly bool _allowPrivateMembers;
+			private readonly bool _forAnimations;
 			private ValueGetterHandler? _valueGetter;
-			private ValueGetterHandler? _precedenceSpecificGetter;
 			private ValueGetterHandler? _substituteValueGetter;
 			private ValueSetterHandler? _valueSetter;
-			private ValueSetterHandler? _localValueSetter;
-			private ValueSetterHandler? _animationFillingValueSetter;
 			private ValueUnsetterHandler? _valueUnsetter;
-			private ValueUnsetterHandler? _animationFillingValueUnsetter;
 
 			private Type? _dataContextType;
 
-			public BindingItem(BindingItem next, string property, object fallbackValue) :
-				this(next, property, fallbackValue, null, false)
+			[Flags]
+			private enum Flags
+			{
+				None = 0,
+				Disposed = 1 << 0,
+				AllowPrivateMembers = 1 << 1,
+				IsDependencyProperty = 1 << 2,
+				IsDependencyPropertyValueSet = 1 << 3,
+			}
+
+			public BindingItem(BindingItem next, string property) :
+				this(next, property, false, false)
 			{
 			}
 
-			internal BindingItem(BindingItem? next, string property, object? fallbackValue, DependencyPropertyValuePrecedences? precedence, bool allowPrivateMembers)
+			internal BindingItem(BindingItem? next, string property, bool forAnimations, bool allowPrivateMembers)
 			{
 				Next = next;
 				PropertyName = property;
-				_precedence = precedence;
-				_fallbackValue = fallbackValue;
-				_allowPrivateMembers = allowPrivateMembers;
+				_forAnimations = forAnimations;
+				AllowPrivateMembers = allowPrivateMembers;
 			}
 
 			public object? DataContext
@@ -51,7 +54,7 @@ namespace Uno.UI.DataBinding
 				get => _dataContextWeakStorage?.Target;
 				set
 				{
-					if (!_disposed)
+					if (!IsDisposed)
 					{
 						// Historically, Uno was processing property changes using INPC. Since the inclusion of DependencyObject
 						// values changes are now filtered by DependencyProperty updates, making equality updates at this location
@@ -69,7 +72,7 @@ namespace Uno.UI.DataBinding
 				}
 			}
 
-			internal void SetWeakDataContext(ManagedWeakReference? weakDataContext, bool transferReferenceOwnership = false)
+			internal void SetWeakDataContext(ManagedWeakReference? weakDataContext)
 			{
 				var previousStorage = _dataContextWeakStorage;
 
@@ -85,7 +88,7 @@ namespace Uno.UI.DataBinding
 			public BindingItem? Next { get; }
 			public string PropertyName { get; }
 
-			public IValueChangedListener? ValueChangedListener { get; set; }
+			public BindingPath? Path { get; set; }
 
 			public object? Value
 			{
@@ -100,7 +103,7 @@ namespace Uno.UI.DataBinding
 			}
 
 			/// <summary>
-			/// Sets the value using the <see cref="_precedence"/>
+			/// Sets the value using Animations precedence, if the binding item is for animations, or using Local precedence otherwise.
 			/// </summary>
 			/// <param name="value">The value to set</param>
 			private void SetValue(object? value)
@@ -109,42 +112,19 @@ namespace Uno.UI.DataBinding
 				SetSourceValue(_valueSetter!, value);
 			}
 
-			/// <summary>
-			/// Sets the value using the <see cref="DependencyPropertyValuePrecedences.Local"/>
-			/// </summary>
-			/// <param name="value">The value to set</param>
-			public void SetLocalValue(object value)
-			{
-				BuildLocalValueSetter();
-				SetSourceValue(_localValueSetter!, value);
-			}
-
-			public void SetAnimationFillingValue(object value)
-			{
-				BuildAnimationFillingValueSetter();
-				SetSourceValue(_animationFillingValueSetter!, value);
-			}
-
 			public Type? PropertyType
 			{
 				get
 				{
 					if (DataContext != null)
 					{
-						return BindingPropertyHelper.GetPropertyType(_dataContextType!, PropertyName, _allowPrivateMembers);
+						return BindingPropertyHelper.GetPropertyType(_dataContextType!, PropertyName, AllowPrivateMembers);
 					}
 					else
 					{
 						return null;
 					}
 				}
-			}
-
-			internal object? GetPrecedenceSpecificValue()
-			{
-				BuildPrecedenceSpecificValueGetter();
-
-				return GetSourceValue(_precedenceSpecificGetter!);
 			}
 
 			internal object? GetSubstituteValue()
@@ -163,16 +143,12 @@ namespace Uno.UI.DataBinding
 					ClearCachedGetters();
 					if (_propertyChanged.Disposable != null)
 					{
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 						try
-#endif
 						{
 							_isDataContextChanging = true;
 							_propertyChanged.Disposable = null;
 						}
-#if !HAS_EXPENSIVE_TRYFINALLY // Try/finally incurs a very large performance hit in mono-wasm - https://github.com/dotnet/runtime/issues/50783
 						finally
-#endif
 						{
 							_isDataContextChanging = false;
 						}
@@ -201,7 +177,7 @@ namespace Uno.UI.DataBinding
 
 			private void OnPropertyChanged(object? previousValue, object? newValue, bool shouldRaiseValueChanged)
 			{
-				if (_isDataContextChanging && newValue is UnsetValue)
+				if (_isDataContextChanging && newValue == DependencyProperty.UnsetValue)
 				{
 					// We're in a "resubscribe" scenario when the DataContext is provided a new non-null value, so we don't need to
 					// pass through the DependencyProperty.UnsetValue.
@@ -214,8 +190,17 @@ namespace Uno.UI.DataBinding
 					Next.DataContext = newValue;
 				}
 
-				if (shouldRaiseValueChanged && previousValue != newValue)
+				if (shouldRaiseValueChanged
+					// If IgnoreINPCSameReferences is true, we will RaiseValueChanged only if previousValue != newValue
+					// If IgnoreINPCSameReferences is false, we are not going to compare previousValue and newValue (which is the correct behavior).
+					// In Uno 6, we should remove the following line.
+					&& (!FeatureConfiguration.Binding.IgnoreINPCSameReferences || previousValue != newValue)
+					)
 				{
+					// We should call RaiseValueChanged even if oldValue == newValue.
+					// It's the responsibility of the user to only raise PropertyChanged event when needed.
+					// Not calling RaiseValueChanged when oldValue == newValue is a bug because a sub-property could
+					// have changed, and it can have an effect when applying the binding, for converters for example.
 					RaiseValueChanged(newValue);
 				}
 			}
@@ -226,10 +211,9 @@ namespace Uno.UI.DataBinding
 
 				if (_dataContextType != currentType && _dataContextType != null)
 				{
+					IsDependencyPropertyValueSet = false;
 					_valueGetter = null;
-					_precedenceSpecificGetter = null;
 					_substituteValueGetter = null;
-					_localValueSetter = null;
 					_valueSetter = null;
 					_valueUnsetter = null;
 				}
@@ -241,42 +225,8 @@ namespace Uno.UI.DataBinding
 			{
 				if (_valueSetter == null && _dataContextType != null)
 				{
-					_valueSetter = BindingPropertyHelper.GetValueSetter(
-						_dataContextType,
-						PropertyName,
-						convert: true,
-						precedence: _precedence ?? DependencyPropertyValuePrecedences.Local
-					);
-					if (_precedence == null)
-					{
-						_localValueSetter = _valueSetter;
-					}
-				}
-			}
-
-			private void BuildLocalValueSetter()
-			{
-				if (_localValueSetter == null && _dataContextType != null)
-				{
-					_localValueSetter = BindingPropertyHelper.GetValueSetter(
-						_dataContextType,
-						PropertyName,
-						convert: true,
-						precedence: DependencyPropertyValuePrecedences.Local
-					);
-				}
-			}
-
-			private void BuildAnimationFillingValueSetter()
-			{
-				if (_animationFillingValueSetter == null && _dataContextType != null)
-				{
-					_animationFillingValueSetter = BindingPropertyHelper.GetValueSetter(
-						_dataContextType,
-						PropertyName,
-						convert: true,
-						precedence: DependencyPropertyValuePrecedences.FillingAnimations
-					);
+					var precedence = _forAnimations ? DependencyPropertyValuePrecedences.Animations : DependencyPropertyValuePrecedences.Local;
+					_valueSetter = BindingPropertyHelper.GetValueSetter(_dataContextType, PropertyName, convert: true, precedence: precedence);
 				}
 			}
 
@@ -312,15 +262,7 @@ namespace Uno.UI.DataBinding
 			{
 				if (_valueGetter == null && _dataContextType != null)
 				{
-					_valueGetter = BindingPropertyHelper.GetValueGetter(_dataContextType, PropertyName, _precedence, _allowPrivateMembers);
-				}
-			}
-
-			private void BuildPrecedenceSpecificValueGetter()
-			{
-				if (_precedenceSpecificGetter == null && _dataContextType != null)
-				{
-					_precedenceSpecificGetter = BindingPropertyHelper.GetValueGetter(_dataContextType, PropertyName, _precedence, _allowPrivateMembers);
+					_valueGetter = BindingPropertyHelper.GetValueGetter(_dataContextType, PropertyName, AllowPrivateMembers);
 				}
 			}
 
@@ -328,12 +270,17 @@ namespace Uno.UI.DataBinding
 			{
 				if (_substituteValueGetter == null && _dataContextType != null)
 				{
+					if (!_forAnimations)
+					{
+						throw new InvalidOperationException("Substitute value is currently used only for Timeline's PropertyInfo which should be using Animations precedence.");
+					}
+
 					_substituteValueGetter =
-						BindingPropertyHelper.GetSubstituteValueGetter(_dataContextType, PropertyName, _precedence ?? DependencyPropertyValuePrecedences.Local);
+						BindingPropertyHelper.GetSubstituteValueGetter(_dataContextType, PropertyName);
 				}
 			}
 
-			private object? GetSourceValue()
+			internal object? GetSourceValue()
 			{
 				BuildValueGetter();
 
@@ -376,9 +323,9 @@ namespace Uno.UI.DataBinding
 			{
 				if (_valueUnsetter == null && _dataContextType != null)
 				{
-					_valueUnsetter = _precedence == null ?
-						BindingPropertyHelper.GetValueUnsetter(_dataContextType, PropertyName) :
-						BindingPropertyHelper.GetValueUnsetter(_dataContextType, PropertyName, precedence: _precedence.Value);
+					_valueUnsetter = _forAnimations ?
+						BindingPropertyHelper.GetValueUnsetter(_dataContextType, PropertyName, precedence: DependencyPropertyValuePrecedences.Animations) :
+						BindingPropertyHelper.GetValueUnsetter(_dataContextType, PropertyName);
 				}
 			}
 
@@ -402,33 +349,9 @@ namespace Uno.UI.DataBinding
 				}
 			}
 
-			private void BuildAnimationFillingValueUnsetter()
-			{
-				if (_animationFillingValueUnsetter == null && _dataContextType != null)
-				{
-					_animationFillingValueUnsetter = BindingPropertyHelper.GetValueUnsetter(
-						_dataContextType,
-						PropertyName,
-						precedence: DependencyPropertyValuePrecedences.FillingAnimations
-					);
-				}
-			}
-
-			internal void ClearAnimationFillingValue()
-			{
-				BuildAnimationFillingValueUnsetter();
-
-				// Capture the datacontext before the call to avoid a race condition with the GC.
-				var dataContext = DataContext;
-				if (dataContext != null)
-				{
-					_animationFillingValueUnsetter!(dataContext);
-				}
-			}
-
 			private void RaiseValueChanged(object? newValue)
 			{
-				ValueChangedListener?.OnValueChanged(newValue);
+				Path?.OnValueChanged(newValue);
 			}
 
 			/// <summary>
@@ -454,7 +377,12 @@ namespace Uno.UI.DataBinding
 
 					if (handlerDisposable != null)
 					{
-						valueHandler.PreviousValue = GetSourceValue();
+						if (FeatureConfiguration.Binding.IgnoreINPCSameReferences)
+						{
+							// GetSourceValue calls into user code.
+							// Avoid this if PreviousValue isn't going to be used at all.
+							valueHandler.PreviousValue = GetSourceValue();
+						}
 
 						// We need to keep the reference to the updatePropertyHandler
 						// in this disposable. The reference is attached to the source's
@@ -478,8 +406,61 @@ namespace Uno.UI.DataBinding
 
 			public void Dispose()
 			{
-				_disposed = true;
+				IsDisposed = true;
 				_propertyChanged.Dispose();
+			}
+
+			private bool IsDisposed
+			{
+				get => (_flags & Flags.Disposed) != 0;
+				set => SetFlag(value, Flags.Disposed);
+			}
+
+			private bool AllowPrivateMembers
+			{
+				get => (_flags & Flags.AllowPrivateMembers) != 0;
+				set => SetFlag(value, Flags.AllowPrivateMembers);
+			}
+
+			private bool IsDependencyPropertyValueSet
+			{
+				get => (_flags & Flags.IsDependencyPropertyValueSet) != 0;
+				set => SetFlag(value, Flags.IsDependencyPropertyValueSet);
+			}
+
+			internal bool IsDependencyProperty
+			{
+				get
+				{
+					if (!IsDependencyPropertyValueSet)
+					{
+						var isDP =
+							_dataContextType is not null
+							&& DependencyProperty.GetProperty(_dataContextType!, PropertyName) is not null;
+
+						SetFlag(isDP, Flags.IsDependencyProperty);
+
+						IsDependencyPropertyValueSet = true;
+
+						return isDP;
+					}
+					else
+					{
+						return (_flags & Flags.IsDependencyProperty) != 0;
+					}
+				}
+			}
+
+			private void SetFlag(bool value, Flags flag)
+			{
+				if (!value)
+				{
+					_flags &= ~flag;
+				}
+				else
+				{
+					_flags |= flag;
+				}
 			}
 
 			/// <summary>
@@ -517,6 +498,35 @@ namespace Uno.UI.DataBinding
 
 				public void NewValue(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
 					=> NewValue();
+			}
+
+			/// <remarks>
+			/// This is defined so that 2 BindingItems are equal if they refer to the same property on the same object
+			/// even if they're a part of 2 different "chains".
+			/// </remarks>
+			public bool Equals(BindingItem? that)
+			{
+				return that != null
+					&& this.PropertyType == that.PropertyType
+					&& !DependencyObjectStore.AreDifferent(this.DataContext, that.DataContext)
+					&& ComparePropertyName(this.PropertyName, that.PropertyName);
+
+				// This is a naive comparison that most definitely doesn't match WinUI, but it should be good enough
+				// for almost all cases.
+				static bool ComparePropertyName(string name1, string name2)
+				{
+					if (name1.StartsWith('['))
+					{
+						// for indexers, we look for an identical match.
+						return name1 == name2;
+					}
+					else
+					{
+						// e.g. "(Microsoft.UI.Xaml.Controls.Border.Background)" and "Background" should match.
+						return name1.Replace(")", "").Replace("(", "").Split(':', '.')[^1] ==
+							name2.Replace(")", "").Replace("(", "").Split(':', '.')[^1];
+					}
+				}
 			}
 		}
 	}

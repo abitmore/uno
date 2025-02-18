@@ -1,12 +1,14 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Windows.Foundation;
-using View = Windows.UI.Xaml.UIElement;
-using System.Collections;
+using Uno.Collections;
 using Uno.UI;
+using Windows.Foundation;
 
-namespace Windows.UI.Xaml
+using View = Microsoft.UI.Xaml.UIElement;
+
+namespace Microsoft.UI.Xaml
 {
 	public partial class FrameworkElement : IEnumerable
 	{
@@ -23,15 +25,9 @@ namespace Windows.UI.Xaml
 
 		internal View FindFirstChild() => throw new NotSupportedException("Reference assembly");
 
-		internal virtual IEnumerable<View> GetChildren() => throw new NotSupportedException("Reference assembly");
+		internal MaterializableList<View> GetChildren() => throw new NotSupportedException("Reference assembly");
 
 		internal bool HasParent() => throw new NotSupportedException("Reference assembly");
-
-		internal void InternalArrange(Rect frame) => throw new NotSupportedException("Reference assembly");
-
-		internal void ForceLoaded() => throw new NotSupportedException("Reference assembly");
-
-		internal int InvalidateMeasureCallCount => throw new NotSupportedException("Reference assembly");
 
 		private bool IsTopLevelXamlView() => throw new NotSupportedException("Reference assembly");
 
@@ -40,19 +36,14 @@ namespace Windows.UI.Xaml
 		internal void ResumeRendering() => throw new NotSupportedException();
 		public IEnumerator GetEnumerator() => _children.GetEnumerator();
 
-		public double ActualWidth => throw new NotSupportedException("Reference assembly");
-
-		public double ActualHeight => throw new NotSupportedException("Reference assembly");
-
-		internal Size UnclippedDesiredSize => throw new NotSupportedException("Reference assembly");
-
 #pragma warning disable 67
-		private event TypedEventHandler<FrameworkElement, object> _loading;
+#pragma warning disable IDE0051
 		private event RoutedEventHandler _loaded;
 		private event RoutedEventHandler _unloaded;
 		public event TypedEventHandler<FrameworkElement, object> Loading;
 		public event RoutedEventHandler Loaded;
 		public event RoutedEventHandler Unloaded;
+#pragma warning restore IDE0051
 #pragma warning restore 67
 	}
 }

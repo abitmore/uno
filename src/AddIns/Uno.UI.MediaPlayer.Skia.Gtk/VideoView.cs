@@ -62,9 +62,11 @@ namespace Uno.UI.Media
 		/// </summary>
 		public VideoView()
 		{
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			if (OperatingSystem.IsLinux())
 			{
+#pragma warning disable CA1806 // Do not ignore method results
 				Native.XInitThreads();
+#pragma warning restore CA1806 // Do not ignore method results
 			}
 
 			LibVLCSharp.Shared.Core.Initialize();
@@ -389,7 +391,7 @@ namespace Uno.UI.Media
 			if (_videoWindow is not null)
 			{
 				_videoWindow.Hide();
-				_videoWindow.Destroy();
+				_videoWindow.Dispose();
 				_videoWindow = null;
 			}
 		}

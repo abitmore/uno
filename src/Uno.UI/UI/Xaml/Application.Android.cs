@@ -7,39 +7,38 @@ using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.Globalization;
-using Windows.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Windows.UI.ViewManagement;
+using Colors = Microsoft.UI.Colors;
+using Uno.UI.Xaml.Controls;
 
-#if HAS_UNO_WINUI
-using LaunchActivatedEventArgs = Microsoft.UI.Xaml.LaunchActivatedEventArgs;
-#else
-using LaunchActivatedEventArgs = Windows.ApplicationModel.Activation.LaunchActivatedEventArgs;
-#endif
+namespace Microsoft.UI.Xaml;
 
-namespace Windows.UI.Xaml
+public partial class Application
 {
-	public partial class Application
+	partial void InitializePartial()
 	{
-		partial void InitializePartial()
-		{
-			Window.Current.ToString();
-			PermissionsHelper.Initialize();
-		}
+		PermissionsHelper.Initialize();
+	}
 
-		static partial void StartPartial(ApplicationInitializationCallback callback)
-		{
-			callback(new ApplicationInitializationCallbackParams());
-		}
+	static partial void StartPartial(ApplicationInitializationCallback callback)
+	{
+		callback(new ApplicationInitializationCallbackParams());
+	}
 
-		partial void OnResumingPartial()
-		{
-			Resuming?.Invoke(null, null);
-		}
+	/// <remarks>
+	/// The 5 second timeout seems to be the safest timeout for suspension activities.
+	/// See - https://stackoverflow.com/a/3987733/732221
+	/// </remarks>
+	private DateTimeOffset GetSuspendingOffset() => DateTimeOffset.Now.AddSeconds(5);
 
-		/// <remarks>
-		/// The 5 second timeout seems to be the safest timeout for suspension activities.
-		/// See - https://stackoverflow.com/a/3987733/732221
-		/// </remarks>
-		private SuspendingOperation CreateSuspendingOperation() =>
-			new SuspendingOperation(DateTimeOffset.Now.AddSeconds(5), null);
+	partial void ApplySystemOverlaysTheming()
+	{
+		// This is needed only due to the fact that currently Instance accessor creates the wrapper
+		// eagerly - which could then happen too early. Will no longer be needed when un-singletoned.
+		if (InitializationComplete)
+		{
+			NativeWindowWrapper.Instance.ApplySystemOverlaysTheming();
+		}
 	}
 }

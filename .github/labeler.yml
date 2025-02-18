@@ -5,8 +5,6 @@ area/automation:
   - src/SamplesApp/**/*
   - src/Uno.UI.Tests/*
   - src/Uno.UI.Tests/**/*
-  - src/Uno.UI.Tests.Performance/*
-  - src/Uno.UI.Tests.Performance/**/*
   - src/Uno.UI.Wasm.Tests/*
   - src/Uno.UI.Wasm.Tests/**/*
 
@@ -28,7 +26,7 @@ kind/documentation:
   - '**/*.MD'
   - '**/*.txt'
 
-area/skia:
+area/skia ✏️:
   - '**/*.skia.cs'
   - src/Uno.UI.Runtime.Skia.Gtk/*
   - src/Uno.UI.Runtime.Skia.Gtk/**/*
@@ -46,14 +44,17 @@ area/solution-templates:
   - src/SolutionTemplate/**/*
   - src/UnoItemTemplate/*
   - src/UnoItemTemplate/**/*
-  
-platform/android:
+
+area/sdk:
+  - src/Uno.Sdk/*
+
+platform/android 🤖:
   - src/Uno.UI.BindingHelper.Android/*
   - src/Uno.UI.BindingHelper.Android/**/*
   - '**/*.Android.cs'
   - '**/*.Xamarin.cs'
   
-platform/wasm:
+platform/wasm 🌐:
   - '**/*.wasm.cs'
   - src/Uno.UI.Wasm/*
   - src/Uno.UI.Wasm/**/*
@@ -62,12 +63,12 @@ platform/wasm:
   - src/Uno.UI.Runtime.WebAssembly/*
   - src/Uno.UI.Runtime.WebAssembly/**/*
 
-platform/ios:
+platform/ios 🍎:
   - '**/*.iOS.cs'
   - '**/*.iOSmacOS.cs'
   - '**/*.Xamarin.cs'
 
-platform/macos:
+platform/macos 🍏:
   - '**/*.macOS.cs'
   - '**/*.iOSmacOS.cs'
   - '**/*.Xamarin.cs'

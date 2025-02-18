@@ -1,32 +1,28 @@
-using CoreGraphics;
-using ObjCRuntime;
-using Uno.UI.DataBinding;
-using Uno.UI.Helpers;
-using Uno.UI.Views.Controls;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Runtime.InteropServices;
-using System.Text;
+using CoreGraphics;
+using Foundation;
+using ObjCRuntime;
 using UIKit;
 using Uno.Extensions;
-using Uno.UI.Extensions;
-using Windows.UI.Xaml.Media;
 using Uno.UI.Controls;
+using Uno.UI.Extensions;
+using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 using Uno.Disposables;
-using Foundation;
 using Uno.Foundation.Logging;
 using Uno.UI;
+using Uno.UI.Xaml;
 using static Uno.UI.FeatureConfiguration;
 
-namespace Windows.UI.Xaml.Controls
+namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class SinglelineTextBoxView : UITextField, ITextBoxView, DependencyObject, IFontScalable
 	{
 		private SinglelineTextBoxDelegate _delegate;
 		private readonly WeakReference<TextBox> _textBox;
-		private WeakBrushChangedProxy _foregroundChangedProxy;
 		private Action _foregroundChanged;
+		private IDisposable _foregroundBrushChangedSubscription;
 
 		public SinglelineTextBoxView(TextBox textBox)
 		{
@@ -36,9 +32,24 @@ namespace Windows.UI.Xaml.Controls
 			Initialize();
 		}
 
-		partial void FinalizerPartial()
+		public override void Paste(NSObject sender) => HandlePaste(() => base.Paste(sender));
+
+		public override void PasteAndGo(NSObject sender) => HandlePaste(() => base.PasteAndGo(sender));
+
+		public override void PasteAndMatchStyle(NSObject sender) => HandlePaste(() => base.PasteAndMatchStyle(sender));
+
+		public override void PasteAndSearch(NSObject sender) => HandlePaste(() => base.PasteAndSearch(sender));
+
+		public override void Paste(NSItemProvider[] itemProviders) => HandlePaste(() => base.Paste(itemProviders));
+
+		private void HandlePaste(Action baseAction)
 		{
-			_foregroundChangedProxy?.Unsubscribe();
+			var args = new TextControlPasteEventArgs();
+			TextBox?.RaisePaste(args);
+			if (!args.Handled)
+			{
+				baseAction.Invoke();
+			}
 		}
 
 		internal TextBox TextBox => _textBox.GetTarget();
@@ -159,7 +170,7 @@ namespace Windows.UI.Xaml.Controls
 
 			if (textBox != null)
 			{
-				var newFont = UIFontHelper.TryGetFont((float)textBox.FontSize, textBox.FontWeight, textBox.FontStyle, textBox.FontFamily);
+				var newFont = FontHelper.TryGetFont(new((float)textBox.FontSize, textBox.FontWeight, textBox.FontStyle, textBox.FontStretch), textBox.FontFamily);
 
 				if (newFont != null)
 				{
@@ -190,27 +201,18 @@ namespace Windows.UI.Xaml.Controls
 		public void OnForegroundChanged(Brush oldValue, Brush newValue)
 		{
 			var textBox = _textBox.GetTarget();
-			_foregroundChangedProxy ??= new();
 			if (textBox != null)
 			{
 				if (newValue is SolidColorBrush scb)
 				{
-					_foregroundChanged = () => ApplyColor();
-					_foregroundChangedProxy.Subscribe(scb, _foregroundChanged);
+					_foregroundBrushChangedSubscription?.Dispose();
+					_foregroundBrushChangedSubscription = Brush.SetupBrushChanged(newValue, ref _foregroundChanged, () => ApplyColor());
 
 					void ApplyColor()
 					{
 						TextColor = scb.Color;
 					}
 				}
-				else
-				{
-					_foregroundChangedProxy.Unsubscribe();
-				}
-			}
-			else
-			{
-				_foregroundChangedProxy.Unsubscribe();
 			}
 		}
 

@@ -12,10 +12,10 @@ namespace Windows.Devices.Sensors
 	{
 		private DateTimeOffset _lastReading = DateTimeOffset.MinValue;
 
-		private Gyrometer()
-		{
-		}
-
+		/// <summary>
+		/// This method is not supported directly. An approximation in the form of raising the 
+		/// ReadingChanged event only when enough time has passed since the last report.
+		/// </summary>
 		public uint ReportInterval { get; set; }
 
 		private static Gyrometer TryCreateInstance()
@@ -45,17 +45,17 @@ namespace Windows.Devices.Sensors
 		/// <param name="z">AngularVelocity Z in radians/s</param>
 		/// <returns>0 - needed to bind method from WASM</returns>
 		[JSExport]
-		public static int DispatchReading(float x, float y, float z)
+		internal static int DispatchReading(float x, float y, float z)
 		{
-			if (_instance == null)
+			if (_instance.Value == null)
 			{
 				throw new InvalidOperationException("Gyrometer:DispatchReading can be called only after Gyrometer is initialized");
 			}
 			var now = DateTimeOffset.UtcNow;
-			if ((now - _instance._lastReading).TotalMilliseconds >= _instance.ReportInterval * 0.8)
+			if ((now - _instance.Value._lastReading).TotalMilliseconds >= _instance.Value.ReportInterval * 0.8)
 			{
-				_instance._lastReading = now;
-				_instance.OnReadingChanged(
+				_instance.Value._lastReading = now;
+				_instance.Value.OnReadingChanged(
 					new GyrometerReading(
 						x * SensorConstants.RadToDeg,
 						y * SensorConstants.RadToDeg,

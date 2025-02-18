@@ -1,19 +1,20 @@
-using Uno.Extensions;
+﻿using Uno.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Collections.Specialized;
 using System.Linq;
-using Windows.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Data;
 using Uno.Diagnostics.Eventing;
-using Windows.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Markup;
 using System.Threading;
 using Windows.UI.Core;
 using Uno.Disposables;
 using System.Diagnostics;
 using System.Globalization;
+using Windows.Graphics.Printing.PrintSupport;
 
-namespace Windows.UI.Xaml.Media.Animation
+namespace Microsoft.UI.Xaml.Media.Animation
 {
 	[ContentProperty(Name = "Children")]
 	public sealed partial class Storyboard : Timeline, ITimeline, IAdditionalChildrenProvider, ITimelineListener
@@ -35,6 +36,7 @@ namespace Windows.UI.Xaml.Media.Animation
 		private int _replayCount = 1;
 		private int _runningChildren;
 		private bool _hasFillingChildren;
+		private bool _hasScheduledCompletion;
 
 		public Storyboard()
 		{
@@ -114,8 +116,8 @@ namespace Windows.UI.Xaml.Media.Animation
 
 		private void Play()
 		{
-			_runningChildren = 0;
-			if (Children != null && Children.Count > 0)
+			_runningChildren = Children?.Count ?? 0;
+			if (_runningChildren > 0)
 			{
 				for (int i = 0; i < Children.Count; i++)
 				{
@@ -123,7 +125,6 @@ namespace Windows.UI.Xaml.Media.Animation
 
 					DisposeChildRegistrations(child);
 
-					_runningChildren++;
 					child.RegisterListener(this);
 
 					child.Begin();
@@ -131,8 +132,17 @@ namespace Windows.UI.Xaml.Media.Animation
 			}
 			else
 			{
+				_hasScheduledCompletion = true;
 				_ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
 				{
+					_hasScheduledCompletion = false;
+					if (State == TimelineState.Stopped)
+					{
+						// If the storyboard was force-stopped,
+						// we don't stop again and don't trigger Completed.
+						return;
+					}
+
 					// No children, so we complete immediately
 					State = TimelineState.Stopped;
 					OnCompleted();
@@ -180,6 +190,11 @@ namespace Windows.UI.Xaml.Media.Animation
 				);
 			}
 
+			if (_hasScheduledCompletion)
+			{
+				return;
+			}
+
 			if (Children != null && Children.Count > 0)
 			{
 				State = TimelineState.Active;
@@ -203,6 +218,11 @@ namespace Windows.UI.Xaml.Media.Animation
 					activity: _traceActivity,
 					payload: new object[] { Target?.GetType().ToString(), PropertyInfo?.Path }
 				);
+			}
+
+			if (_hasScheduledCompletion)
+			{
+				return;
 			}
 
 			State = TimelineState.Paused;
